@@ -49,6 +49,8 @@
         <dep.scalatest.version>3.0.3</dep.scalatest.version>
         <dep.sourcecode.version>0.1.2</dep.sourcecode.version>
         <dep.spark.version>2.2.0</dep.spark.version>
+        <dep.jmh.version>1.19</dep.jmh.version>
+
     </properties>
 
     <repositories>

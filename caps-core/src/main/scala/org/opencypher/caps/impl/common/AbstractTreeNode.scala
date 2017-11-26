@@ -30,7 +30,7 @@ import scala.reflect.ClassTag
 abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] {
   self: T =>
 
-  override lazy val children: Seq[T] = productIterator.toVector.collect { case t: T => t }
+  protected override val children: Seq[T] = productIterator.collect { case t: T => t }.toArray
 
   /**
     * Cache children as a set for faster rewrites.
@@ -38,12 +38,15 @@ abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] 
   override lazy val childrenAsSet = children.toSet
 
   override def withNewChildren(newChildren: Seq[T]): T = {
-    val newAsVector = newChildren.toVector
-    if (children == newAsVector) {
+    val newAsArray = newChildren.toArray
+    if (children.length == newAsArray.length && {
+          for (i <- 0 to children.length) {}
+
+        }) {
       self
     } else {
       require(
-        children.length == newAsVector.length,
+        children.length == newAsArray.length,
         s"invalid children for $productPrefix: ${newAsVector.mkString(", ")}")
       val substitutions = children.toList.zip(newAsVector)
       val (updatedConstructorParams, _) = productIterator.foldLeft((Vector.empty[Any], substitutions)) {

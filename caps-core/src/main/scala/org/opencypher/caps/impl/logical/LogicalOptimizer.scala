@@ -22,7 +22,7 @@ import org.opencypher.caps.impl.spark.exception.Raise
 import org.opencypher.caps.ir.api.Label
 
 class LogicalOptimizer(producer: LogicalOperatorProducer)
-  extends DirectCompilationStage[LogicalOperator, LogicalOperator, LogicalPlannerContext] {
+    extends DirectCompilationStage[LogicalOperator, LogicalOperator, LogicalPlannerContext] {
 
   override def process(input: LogicalOperator)(implicit context: LogicalPlannerContext): LogicalOperator = {
     val labelMap = ExtractLabels(input).groupBy(_._1).mapValues(_.map(_._2.name))
@@ -39,9 +39,9 @@ trait LogicalRewriter extends (LogicalOperator => LogicalOperator) {
   def rewriteChildren(child: LogicalOperator, r: LogicalRewriter = this): LogicalOperator = {
     child match {
       case b: BinaryLogicalOperator =>
-        b.withNewChildren(Seq(r(b.lhs), r(b.rhs)))
+        b.withNewChildren(Array(r(b.lhs), r(b.rhs)))
       case s: StackingLogicalOperator =>
-        s.withNewChildren(Seq(r(s.in)))
+        s.withNewChildren(Array(r(s.in)))
       case l: LogicalLeafOperator =>
         l
     }
@@ -58,7 +58,7 @@ object ExtractLabels extends LogicalAggregator[Set[(Var, Label)]] {
       case Filter(expr, in, _) =>
         val res = expr match {
           case HasLabel(v: Var, label) => Set(v -> label)
-          case _ => Set.empty
+          case _                       => Set.empty
         }
         res ++ ExtractLabels(in)
       case s: StackingLogicalOperator =>
@@ -73,10 +73,10 @@ object ExtractLabels extends LogicalAggregator[Set[(Var, Label)]] {
 case object DiscardStackedRecordOperations extends LogicalRewriter {
   override def apply(root: LogicalOperator): LogicalOperator = {
     root match {
-      case s: SetSourceGraph => s.withNewChildren(Seq(DiscardStackedRecordOperations(s.in)))
-      case p: ProjectGraph => p.withNewChildren(Seq(DiscardStackedRecordOperations(p.in)))
+      case s: SetSourceGraph          => s.withNewChildren(Array(DiscardStackedRecordOperations(s.in)))
+      case p: ProjectGraph            => p.withNewChildren(Array(DiscardStackedRecordOperations(p.in)))
       case s: StackingLogicalOperator => DiscardStackedRecordOperations(s.in)
-      case other => rewriteChildren(other)
+      case other                      => rewriteChildren(other)
     }
   }
 }
@@ -84,15 +84,15 @@ case object DiscardStackedRecordOperations extends LogicalRewriter {
 case class PushLabelFiltersIntoScans(labelMap: Map[Var, Set[String]]) extends LogicalRewriter {
   override def apply(root: LogicalOperator): LogicalOperator = {
     root match {
-      case n@NodeScan(node, in, _) =>
+      case n @ NodeScan(node, in, _) =>
         val labels = labelMap.getOrElse(node, Set.empty)
         val nodeVar = Var(node.name)(CTNode(labels))
         val solved = in.solved.withPredicates(labels.map(l => HasLabel(nodeVar, Label(l))(CTBoolean)).toSeq: _*)
-        NodeScan(nodeVar, this (in), solved)
-      case f@Filter(expr, in, _) =>
+        NodeScan(nodeVar, this(in), solved)
+      case f @ Filter(expr, in, _) =>
         expr match {
-          case _: HasLabel => this (in)
-          case _ => f.withNewChildren(Seq(this(in)))
+          case _: HasLabel => this(in)
+          case _           => f.withNewChildren(Array(this(in)))
         }
       case other => rewriteChildren(other)
     }
@@ -102,7 +102,7 @@ case class PushLabelFiltersIntoScans(labelMap: Map[Var, Set[String]]) extends Lo
 case object DiscardNodeScanForInexistentLabel extends LogicalRewriter {
   override def apply(root: LogicalOperator): LogicalOperator = {
     root match {
-      case s@NodeScan(v, in, _) =>
+      case s @ NodeScan(v, in, _) =>
         v.cypherType match {
           case CTNode(labels) =>
             labels.size match {

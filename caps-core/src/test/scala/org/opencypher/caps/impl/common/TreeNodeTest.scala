@@ -77,7 +77,7 @@ class TreeNodeTest extends FunSuite with Matchers {
   }
 
   test("copy with the same children returns the same instance") {
-    calculation.withNewChildren(Seq(calculation.left, calculation.right)) should referenceEqual(calculation)
+    calculation.withNewChildren(Array(calculation.left, calculation.right)) should referenceEqual(calculation)
   }
 
   abstract class CalcExpr extends AbstractTreeNode[CalcExpr] {

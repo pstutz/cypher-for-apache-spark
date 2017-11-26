@@ -30,32 +30,18 @@ import scala.reflect.ClassTag
 abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] {
   self: T =>
 
-  protected override val children: Seq[T] = productIterator.collect { case t: T => t }.toArray
+  override val children: Array[T] = productIterator.collect { case t: T => t }.toArray
 
   /**
     * Cache children as a set for faster rewrites.
     */
   override lazy val childrenAsSet = children.toSet
 
-  override def withNewChildren(newChildren: Seq[T]): T = {
-    val newAsArray = newChildren.toArray
-    if (children.length == newAsArray.length && {
-          for (i <- 0 to children.length) {}
-
-        }) {
+  override def withNewChildren(newChildren: Array[T]): T = {
+    if (sameAsCurrentChildren(newChildren)) {
       self
     } else {
-      require(
-        children.length == newAsArray.length,
-        s"invalid children for $productPrefix: ${newAsVector.mkString(", ")}")
-      val substitutions = children.toList.zip(newAsVector)
-      val (updatedConstructorParams, _) = productIterator.foldLeft((Vector.empty[Any], substitutions)) {
-        case ((result, remainingSubs), next) =>
-          remainingSubs match {
-            case (oldC, newC) :: tail if next == oldC => (result :+ newC, tail)
-            case _                                    => (result :+ next, remainingSubs)
-          }
-      }
+      val updatedConstructorParams = updateConstructorParams(newChildren)
       val copyMethod = AbstractTreeNode.copyMethod(self)
       try {
         copyMethod(updatedConstructorParams: _*).asInstanceOf[T]
@@ -68,6 +54,41 @@ abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] 
                 |Copy method: $copyMethod""".stripMargin
           )
       }
+    }
+  }
+
+  @inline private final def updateConstructorParams(newChildren: Array[T]): Array[Any] = {
+    require(
+      children.length == newChildren.length,
+      s"invalid children for $productPrefix: ${newChildren.mkString(", ")}")
+    val parameterArray = new Array[Any](productArity)
+    val parameterArrayLength = productArity
+    var productIndex = 0
+    var childrenIndex = 0
+    while (productIndex < parameterArrayLength) {
+      val currentProductElement = productElement(productIndex)
+      if (currentProductElement == children(childrenIndex)) {
+        parameterArray(productIndex) = newChildren(childrenIndex)
+        childrenIndex += 1
+      } else {
+        parameterArray(productIndex) = currentProductElement
+      }
+      productIndex += 1
+    }
+    parameterArray
+  }
+
+  @inline private final def sameAsCurrentChildren(newChildren: Array[T]): Boolean = {
+    val length = children.length
+    if (length != newChildren.length) {
+      false
+    } else {
+      var i = 0
+      while (i < length) {
+        if (children(i) != newChildren(i)) return false
+        i += 1
+      }
+      true
     }
   }
 

@@ -33,26 +33,37 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
   def childrenAsSet: Set[T] = children.toSet
 
   // Optimization: Cache hash code, speeds up repeated computations over high trees.
-  override lazy val hashCode: Int = MurmurHash3.productHash(self)
+  override val hashCode: Int = MurmurHash3.productHash(self)
 
   def arity: Int = children.length
 
   def isLeaf: Boolean = height == 1
 
-  lazy val height: Int = if (children.isEmpty) 1 else children.map(_.height).max + 1
+  lazy final val height: Int = if (children.isEmpty) 1 else children.map(_.height).max + 1
 
-  def map[O <: TreeNode[O]: ClassTag](f: T => O): O = {
-    f(self).withNewChildren(children.map(f))
+  @inline final def map[O <: TreeNode[O]: ClassTag](f: T => O): O = {
+    val childrenLength = children.length
+    if (childrenLength == 0) {
+      f(self)
+    } else {
+      val mappedChildren = new Array[O](childrenLength)
+      var i = 0
+      while (i < childrenLength) {
+        mappedChildren(i) = f(children(i))
+        i += 1
+      }
+      f(self).withNewChildren(mappedChildren)
+    }
   }
 
-  override def foldLeft[O](initial: O)(f: (O, T) => O): O = {
+  @inline override final def foldLeft[O](initial: O)(f: (O, T) => O): O = {
     children.foldLeft(f(initial, this)) {
       case (agg, nextChild) =>
         nextChild.foldLeft(agg)(f)
     }
   }
 
-  override def foreach[O](f: T => O): Unit = {
+  @inline override final def foreach[O](f: T => O): Unit = {
     f(this)
     children.foreach(_.foreach(f))
   }
@@ -63,7 +74,7 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     * @param other other tree
     * @return true, iff `other` is contained in that tree
     */
-  def containsTree(other: T): Boolean = {
+  @inline final def containsTree(other: T): Boolean = {
     if (self == other) true else children.exists(_.containsTree(other))
   }
 
@@ -73,7 +84,7 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     * @param other other tree
     * @return true, iff `other` is a direct child of this tree
     */
-  def containsChild(other: T): Boolean = {
+  @inline final def containsChild(other: T): Boolean = {
     childrenAsSet.contains(other)
   }
 
@@ -84,9 +95,13 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     * @param rule rewrite rule
     * @return rewritten tree
     */
-  def transformUp(rule: PartialFunction[T, T]): T = {
-    val afterChildren = withNewChildren(children.map(_.transformUp(rule)))
-    if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
+  @inline final def transformUp(rule: PartialFunction[T, T]): T = {
+    if (children.length == 0) {
+      if (rule.isDefinedAt(self)) rule(self) else self
+    } else {
+      val afterChildren = withNewChildren(children.map(_.transformUp(rule)))
+      if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
+    }
   }
 
   /**
@@ -97,9 +112,13 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     * @param rule rewrite rule
     * @return rewritten tree
     */
-  def transformDown(rule: PartialFunction[T, T]): T = {
-    val afterSelf = if (rule.isDefinedAt(self)) rule(self) else self
-    afterSelf.withNewChildren(afterSelf.children.map(_.transformDown(rule)))
+  @inline final def transformDown(rule: PartialFunction[T, T]): T = {
+    if (children.length == 0) {
+      if (rule.isDefinedAt(self)) rule(self) else self
+    } else {
+      val afterSelf = if (rule.isDefinedAt(self)) rule(self) else self
+      afterSelf.withNewChildren(afterSelf.children.map(_.transformDown(rule)))
+    }
   }
 
   /**

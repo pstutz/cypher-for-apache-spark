@@ -18,7 +18,7 @@ package org.opencypher.caps.impl.common
 import scala.reflect.ClassTag
 import scala.util.hashing.MurmurHash3
 
-abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Traversable[T] {
+abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traversable[T] {
 
   self: T =>
 
@@ -41,7 +41,7 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
 
   lazy final val height: Int = if (children.isEmpty) 1 else children.map(_.height).max + 1
 
-  @inline final def map[O <: TreeNode[O]: ClassTag](f: T => O): O = {
+  @inline final def map[O <: TreeNode[O] : ClassTag](f: T => O): O = {
     val childrenLength = children.length
     if (childrenLength == 0) {
       f(self)
@@ -96,12 +96,22 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     * @return rewritten tree
     */
   @inline final def transformUp(rule: PartialFunction[T, T]): T = {
-    if (children.length == 0) {
-      if (rule.isDefinedAt(self)) rule(self) else self
+    val childrenLength = children.length
+    val afterChildren = if (childrenLength == 0) {
+      self
     } else {
-      val afterChildren = withNewChildren(children.map(_.transformUp(rule)))
-      if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
+      val updatedChildren = {
+        val childrenCopy = new Array[T](childrenLength)
+        var i = 0
+        while (i < childrenLength) {
+          childrenCopy(i) = children(i).transformUp(rule)
+          i += 1
+        }
+        childrenCopy
+      }
+      withNewChildren(updatedChildren)
     }
+    if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
   }
 
   /**
@@ -113,11 +123,21 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     * @return rewritten tree
     */
   @inline final def transformDown(rule: PartialFunction[T, T]): T = {
-    if (children.length == 0) {
-      if (rule.isDefinedAt(self)) rule(self) else self
+    val afterSelf = if (rule.isDefinedAt(self)) rule(self) else self
+    val childrenLength = afterSelf.children.length
+    if (childrenLength == 0) {
+      afterSelf
     } else {
-      val afterSelf = if (rule.isDefinedAt(self)) rule(self) else self
-      afterSelf.withNewChildren(afterSelf.children.map(_.transformDown(rule)))
+      val updatedChildren = {
+        val childrenCopy = new Array[T](childrenLength)
+        var i = 0
+        while (i < childrenLength) {
+          childrenCopy(i) = afterSelf.children(i).transformDown(rule)
+          i += 1
+        }
+        childrenCopy
+      }
+      afterSelf.withNewChildren(updatedChildren)
     }
   }
 
@@ -149,7 +169,7 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     */
   def args: Iterator[Any] = productIterator.flatMap {
     case tn: T if containsChild(tn) => None // Don't print children
-    case other                      => Some(other.toString)
+    case other => Some(other.toString)
   }
 
   override def toString = s"${getClass.getSimpleName}${if (argString.isEmpty) "" else s"($argString)"}"

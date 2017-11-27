@@ -43,18 +43,18 @@ class TreeNodeTest extends FunSuite with Matchers {
   }
 
   test("rewrite") {
-    val addNoops: PartialFunction[CalcExpr, CalcExpr] = {
+    val addNoOps: PartialFunction[CalcExpr, CalcExpr] = {
       case Add(n1: Number, n2: Number) => Add(NoOp(n1), NoOp(n2))
       case Add(n1: Number, n2)         => Add(NoOp(n1), n2)
       case Add(n1, n2: Number)         => Add(n1, NoOp(n2))
     }
 
     val expected = Add(NoOp(Number(5)), Add(NoOp(Number(4)), NoOp(Number(3))))
-    val down = calculation.transformDown(addNoops)
-    down should equal(expected)
+    val down = calculation.transformDown(addNoOps)
+    down should equalWithTracing(expected)
 
-    val up = calculation.transformUp(addNoops)
-    up should equal(expected)
+    val up = calculation.transformUp(addNoOps)
+    up should equalWithTracing(expected)
   }
 
   test("arg string") {

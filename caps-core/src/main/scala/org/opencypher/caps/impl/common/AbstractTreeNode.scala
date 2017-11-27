@@ -27,10 +27,28 @@ import scala.reflect.ClassTag
   * in children is their order in the constructor. Every constructor parameter of type `T` is
   * assumed to be a child node.
   */
-abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] {
+abstract class AbstractTreeNode[T <: TreeNode[T] : ClassTag] extends TreeNode[T] {
   self: T =>
 
-  override val children: Array[T] = productIterator.collect { case t: T => t }.toArray
+  override val children: Array[T] = {
+    val constructorParamLength = productArity
+    val childrenArray = new Array[T](constructorParamLength)
+    var i = 0
+    var ci = 0
+    while (i < constructorParamLength) {
+      val pi = productElement(i)
+      pi match {
+        case c: T =>
+          childrenArray(ci) = c
+          ci += 1
+        case _ =>
+      }
+      i += 1
+    }
+    val properSizedChildren = new Array[T](ci)
+    System.arraycopy(childrenArray, 0, properSizedChildren, 0, ci)
+    properSizedChildren
+  }
 
   /**
     * Cache children as a set for faster rewrites.
@@ -38,23 +56,23 @@ abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] 
   override lazy val childrenAsSet = children.toSet
 
   override def withNewChildren(newChildren: Array[T]): T = {
-    if (sameAsCurrentChildren(newChildren)) {
-      self
-    } else {
-      val updatedConstructorParams = updateConstructorParams(newChildren)
-      val copyMethod = AbstractTreeNode.copyMethod(self)
-      try {
-        copyMethod(updatedConstructorParams: _*).asInstanceOf[T]
-      } catch {
-        case e: Exception =>
-          Raise.invalidArgument(
-            s"valid constructor arguments for $productPrefix",
-            s"""|${updatedConstructorParams.mkString(", ")}
-                |Original exception: $e
-                |Copy method: $copyMethod""".stripMargin
-          )
+      if (sameAsCurrentChildren(newChildren)) {
+        self
+      } else {
+        val updatedConstructorParams = updateConstructorParams(newChildren)
+        val copyMethod = AbstractTreeNode.copyMethod(self)
+        try {
+          copyMethod(updatedConstructorParams: _*).asInstanceOf[T]
+        } catch {
+          case e: Exception =>
+            Raise.invalidArgument(
+              s"valid constructor arguments for $productPrefix",
+              s"""|${updatedConstructorParams.mkString(", ")}
+                  |Original exception: $e
+                  |Copy method: $copyMethod""".stripMargin
+            )
+        }
       }
-    }
   }
 
   @inline private final def updateConstructorParams(newChildren: Array[T]): Array[Any] = {
@@ -79,12 +97,12 @@ abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] 
   }
 
   @inline private final def sameAsCurrentChildren(newChildren: Array[T]): Boolean = {
-    val length = children.length
-    if (length != newChildren.length) {
+    val childrenLength = children.length
+    if (childrenLength != newChildren.length) {
       false
     } else {
       var i = 0
-      while (i < length) {
+      while (i < childrenLength) {
         if (children(i) != newChildren(i)) return false
         i += 1
       }

@@ -80,8 +80,8 @@ abstract class AbstractTreeNode[T <: TreeNode[T] : ClassTag] extends TreeNode[T]
     require(
       children.length == newChildren.length,
       s"invalid children for $productPrefix: ${newChildren.mkString(", ")}")
-    val parameterArray = new Array[Any](productArity)
     val parameterArrayLength = productArity
+    val parameterArray = new Array[Any](parameterArrayLength)
     var productIndex = 0
     var childrenIndex = 0
     while (productIndex < parameterArrayLength) {

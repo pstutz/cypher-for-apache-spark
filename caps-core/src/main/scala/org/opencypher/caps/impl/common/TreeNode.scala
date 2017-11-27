@@ -15,6 +15,8 @@
  */
 package org.opencypher.caps.impl.common
 
+import java.util.concurrent.RecursiveTask
+
 import scala.reflect.ClassTag
 import scala.util.hashing.MurmurHash3
 
@@ -32,14 +34,34 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traver
     */
   def childrenAsSet: Set[T] = children.toSet
 
-  // Optimization: Cache hash code, speeds up repeated computations over high trees.
-  override val hashCode: Int = MurmurHash3.productHash(self)
+  // Optimization: Cache hash code, speeds up repeated computations over large trees.
+  override final lazy val hashCode: Int = MurmurHash3.productHash(self)
+
+  override final lazy val size: Int = {
+    val childrenLength = children.length
+    var i = 0
+    var result = 1
+    while (i < childrenLength) {
+      result += children(i).size
+      i += 1
+    }
+    result
+  }
+
+  lazy final val height: Int = {
+    val childrenLength = children.length
+    var i = 0
+    var result = 0
+    while (i < childrenLength) {
+      result = math.max(result, children(i).height)
+      i += 1
+    }
+    result + 1
+  }
 
   def arity: Int = children.length
 
   def isLeaf: Boolean = height == 1
-
-  lazy final val height: Int = if (children.isEmpty) 1 else children.map(_.height).max + 1
 
   @inline final def map[O <: TreeNode[O] : ClassTag](f: T => O): O = {
     val childrenLength = children.length

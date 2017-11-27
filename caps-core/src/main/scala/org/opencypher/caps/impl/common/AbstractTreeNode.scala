@@ -15,6 +15,7 @@
  */
 package org.opencypher.caps.impl.common
 
+import org.opencypher.caps.impl.common.AbstractTreeNode.cachedCopyMethods
 import org.opencypher.caps.impl.spark.exception.Raise
 
 import scala.reflect.ClassTag
@@ -30,7 +31,7 @@ import scala.reflect.ClassTag
 abstract class AbstractTreeNode[T <: TreeNode[T] : ClassTag] extends TreeNode[T] {
   self: T =>
 
-  override val children: Array[T] = {
+  override final val children: Array[T] = {
     val constructorParamLength = productArity
     val childrenArray = new Array[T](constructorParamLength)
     var i = 0
@@ -53,26 +54,26 @@ abstract class AbstractTreeNode[T <: TreeNode[T] : ClassTag] extends TreeNode[T]
   /**
     * Cache children as a set for faster rewrites.
     */
-  override lazy val childrenAsSet = children.toSet
+  override final lazy val childrenAsSet = children.toSet
 
-  override def withNewChildren(newChildren: Array[T]): T = {
-      if (sameAsCurrentChildren(newChildren)) {
-        self
-      } else {
-        val updatedConstructorParams = updateConstructorParams(newChildren)
-        val copyMethod = AbstractTreeNode.copyMethod(self)
-        try {
-          copyMethod(updatedConstructorParams: _*).asInstanceOf[T]
-        } catch {
-          case e: Exception =>
-            Raise.invalidArgument(
-              s"valid constructor arguments for $productPrefix",
-              s"""|${updatedConstructorParams.mkString(", ")}
-                  |Original exception: $e
-                  |Copy method: $copyMethod""".stripMargin
-            )
-        }
+  @inline override final def withNewChildren(newChildren: Array[T]): T = {
+    if (sameAsCurrentChildren(newChildren)) {
+      self
+    } else {
+      val updatedConstructorParams = updateConstructorParams(newChildren)
+      val copyMethod = AbstractTreeNode.copyMethod(self)
+      try {
+        copyMethod(updatedConstructorParams: _*).asInstanceOf[T]
+      } catch {
+        case e: Exception =>
+          Raise.invalidArgument(
+            s"valid constructor arguments for $productPrefix",
+            s"""|${updatedConstructorParams.mkString(", ")}
+                |Original exception: $e
+                |Copy method: $copyMethod""".stripMargin
+          )
       }
+    }
   }
 
   @inline private final def updateConstructorParams(newChildren: Array[T]): Array[Any] = {
@@ -113,33 +114,34 @@ abstract class AbstractTreeNode[T <: TreeNode[T] : ClassTag] extends TreeNode[T]
 }
 
 /**
-  * Caches an instance of the copy method per case class type and thread.
+  * Caches an instance of the copy method per case class type.
   */
 object AbstractTreeNode {
 
   import scala.reflect.runtime.universe
   import scala.reflect.runtime.universe._
 
-  private lazy val cachedCopyMethods = new ThreadLocal[Map[Class[_], MethodMirror]]() {
-    override def initialValue = Map.empty[Class[_], MethodMirror]
-  }
+  // No synchronization required: no problem if a cache entry is lost due to a concurrent write.
+  @volatile private var cachedCopyMethods = Map.empty[Class[_], MethodMirror]
 
-  private lazy val mirror = universe.runtimeMirror(getClass.getClassLoader)
+  private final lazy val mirror = universe.runtimeMirror(getClass.getClassLoader)
 
-  protected def copyMethod[T <: TreeNode[T]](instance: AbstractTreeNode[T]): MethodMirror = {
+  @inline protected final def copyMethod(instance: AbstractTreeNode[_]): MethodMirror = {
     val instanceClass = instance.getClass
-    val cacheMap = cachedCopyMethods.get()
-    cacheMap.getOrElse(
+    cachedCopyMethods.getOrElse(
       instanceClass, {
-        val instanceMirror = mirror.reflect(instance)
-        val tpe = instanceMirror.symbol.asType.toType
-        val copyMethodSymbol = tpe.decl(TermName("copy")).asMethod
-        val copyMethod = instanceMirror.reflectMethod(copyMethodSymbol)
-        val updatedCacheMap = cacheMap.updated(instanceClass, copyMethod)
-        cachedCopyMethods.set(updatedCacheMap)
+        val copyMethod = reflectCopyMethod(instance)
+        cachedCopyMethods = cachedCopyMethods.updated(instanceClass, copyMethod)
         copyMethod
       }
     )
+  }
+
+  @inline private final def reflectCopyMethod(instance: Object): MethodMirror = {
+    val instanceMirror = mirror.reflect(instance)
+    val tpe = instanceMirror.symbol.asType.toType
+    val copyMethodSymbol = tpe.decl(TermName("copy")).asMethod
+    instanceMirror.reflectMethod(copyMethodSymbol)
   }
 
 }

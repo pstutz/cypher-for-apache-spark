@@ -15,13 +15,10 @@
  */
 package org.opencypher.caps.impl.common
 
-import java.util.concurrent.RecursiveTask
-
 import scala.reflect.ClassTag
 import scala.util.hashing.MurmurHash3
 
-abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traversable[T] {
-
+abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Traversable[T] {
   self: T =>
 
   def withNewChildren(newChildren: Array[T]): T
@@ -48,7 +45,7 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traver
     result
   }
 
-  lazy final val height: Int = {
+  final lazy val height: Int = {
     val childrenLength = children.length
     var i = 0
     var result = 0
@@ -63,7 +60,7 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traver
 
   def isLeaf: Boolean = height == 1
 
-  @inline final def map[O <: TreeNode[O] : ClassTag](f: T => O): O = {
+  @inline final def map[O <: TreeNode[O]: ClassTag](f: T => O): O = {
     val childrenLength = children.length
     if (childrenLength == 0) {
       f(self)
@@ -78,16 +75,14 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traver
     }
   }
 
-  @inline override final def foldLeft[O](initial: O)(f: (O, T) => O): O = {
-    children.foldLeft(f(initial, this)) {
-      case (agg, nextChild) =>
-        nextChild.foldLeft(agg)(f)
-    }
-  }
-
   @inline override final def foreach[O](f: T => O): Unit = {
     f(this)
-    children.foreach(_.foreach(f))
+    val childrenLength = children.length
+    var i = 0
+    while (i < childrenLength) {
+      children(i).foreach(f)
+      i += 1
+    }
   }
 
   /**
@@ -97,7 +92,14 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traver
     * @return true, iff `other` is contained in that tree
     */
   @inline final def containsTree(other: T): Boolean = {
-    if (self == other) true else children.exists(_.containsTree(other))
+    if (self == other) {
+      true
+    } else {
+      val childrenLength = children.length
+      var i = 0
+      while (i < childrenLength && !children(i).containsTree(other)) i += 1
+      i != childrenLength
+    }
   }
 
   /**
@@ -191,7 +193,7 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag] extends Product with Traver
     */
   def args: Iterator[Any] = productIterator.flatMap {
     case tn: T if containsChild(tn) => None // Don't print children
-    case other => Some(other.toString)
+    case other                      => Some(other.toString)
   }
 
   override def toString = s"${getClass.getSimpleName}${if (argString.isEmpty) "" else s"($argString)"}"

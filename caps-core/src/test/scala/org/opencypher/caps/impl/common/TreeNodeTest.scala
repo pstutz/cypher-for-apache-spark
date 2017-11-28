@@ -23,6 +23,12 @@ class TreeNodeTest extends FunSuite with Matchers {
 
   val leaf = Number(1)
 
+  val addNoOps: PartialFunction[CalcExpr, CalcExpr] = {
+    case Add(n1: Number, n2: Number) => Add(NoOp(n1), NoOp(n2))
+    case Add(n1: Number, n2)         => Add(NoOp(n1), n2)
+    case Add(n1, n2: Number)         => Add(n1, NoOp(n2))
+  }
+
   test("aggregate") {
     calculation.eval should equal(12)
   }
@@ -43,18 +49,30 @@ class TreeNodeTest extends FunSuite with Matchers {
   }
 
   test("rewrite") {
-    val addNoOps: PartialFunction[CalcExpr, CalcExpr] = {
-      case Add(n1: Number, n2: Number) => Add(NoOp(n1), NoOp(n2))
-      case Add(n1: Number, n2)         => Add(NoOp(n1), n2)
-      case Add(n1, n2: Number)         => Add(n1, NoOp(n2))
-    }
-
     val expected = Add(NoOp(Number(5)), Add(NoOp(Number(4)), NoOp(Number(3))))
     val down = calculation.transformDown(addNoOps)
     down should equalWithTracing(expected)
 
     val up = calculation.transformUp(addNoOps)
     up should equalWithTracing(expected)
+  }
+
+  test("support relatively high trees without stack overflow") {
+    val highTree = (1 to 1000).foldLeft(Number(1): CalcExpr) {
+      case (t, n) => Add(t, Number(n))
+    }
+    val simplified = highTree.transformUp {
+      case Add(Number(n1), Number(n2)) => Number(n1 + n2)
+    }
+    simplified should equal(Number(500501))
+
+    val addNoOpsBeforeLeftAdd: PartialFunction[CalcExpr, CalcExpr] = {
+      case Add(a: Add, b) => Add(NoOp(a), b)
+    }
+    val noOpTree = highTree.transformDown {
+      addNoOpsBeforeLeftAdd
+    }
+    noOpTree.height should equal(2000)
   }
 
   test("arg string") {

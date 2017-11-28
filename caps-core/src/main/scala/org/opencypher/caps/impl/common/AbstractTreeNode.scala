@@ -28,7 +28,7 @@ import scala.reflect.ClassTag
   * in children is their order in the constructor. Every constructor parameter of type `T` is
   * assumed to be a child node.
   */
-abstract class AbstractTreeNode[T <: TreeNode[T] : ClassTag] extends TreeNode[T] {
+abstract class AbstractTreeNode[T <: TreeNode[T]: ClassTag] extends TreeNode[T] {
   self: T =>
 
   override final val children: Array[T] = {
@@ -103,14 +103,10 @@ abstract class AbstractTreeNode[T <: TreeNode[T] : ClassTag] extends TreeNode[T]
       false
     } else {
       var i = 0
-      while (i < childrenLength) {
-        if (children(i) != newChildren(i)) return false
-        i += 1
-      }
-      true
+      while (i < childrenLength && children(i) == newChildren(i)) i += 1
+      i == childrenLength
     }
   }
-
 }
 
 /**

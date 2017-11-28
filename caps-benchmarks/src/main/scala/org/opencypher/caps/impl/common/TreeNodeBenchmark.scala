@@ -22,11 +22,10 @@ import org.openjdk.jmh.annotations._
 @Threads(1)
 @Fork(
   value = 1,
-  jvmArgs = Array(
-    "-Xms4G",
-    "-XX:+UnlockCommercialFeatures",
-    "-XX:+FlightRecorder",
-    "-XX:StartFlightRecording=duration=0s,delay=0s,dumponexit=true,filename=bm.jfr")
+  jvmArgs = Array("-Xms4G") //,
+//"-XX:+UnlockCommercialFeatures",
+//"-XX:+FlightRecorder",
+//"-XX:StartFlightRecording=duration=0s,delay=0s,dumponexit=true,filename=bm.jfr"
 )
 @Warmup(iterations = 10)
 @Measurement(iterations = 10)

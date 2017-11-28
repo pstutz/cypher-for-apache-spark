@@ -19,37 +19,100 @@ import java.util.concurrent.TimeUnit
 
 import org.openjdk.jmh.annotations._
 
-@Threads(1)
-@Fork(
-  value = 1,
-  jvmArgs = Array("-Xms4G") //,
+//@Threads(1)
+//  value = 1,
+//,
 //"-XX:+UnlockCommercialFeatures",
 //"-XX:+FlightRecorder",
 //"-XX:StartFlightRecording=duration=0s,delay=0s,dumponexit=true,filename=bm.jfr"
-)
-@Warmup(iterations = 10)
-@Measurement(iterations = 10)
-@State(Scope.Thread)
+//@Warmup(iterations = 10)
+//@Measurement(iterations = 10)
+//@State(Scope.Thread)
 //@BenchmarkMode(Array(Mode.AverageTime))
 //@OutputTimeUnit(TimeUnit.MICROSECONDS)
-//@State(Scope.Benchmark)
+
+@Fork(value = 3, jvmArgs = Array("-Xms4G"))
+@State(Scope.Benchmark)
 class TreeNodeBenchmark {
 
   val calculation =
     Add(
-      Number(0),
       Add(
-        Number(1),
         Add(
+          Number(0),
           Add(
-            Number(2),
-            Number(3)
-          ),
-          Add(
-            Number(4),
+            Number(1),
             Add(
-              Number(5),
-              Number(6)
+              Add(
+                Number(2),
+                Number(3)
+              ),
+              Add(
+                Number(4),
+                Add(
+                  Number(5),
+                  Number(6)
+                )
+              )
+            )
+          )
+        ),
+        Add(
+          Number(7),
+          Add(
+            Number(8),
+            Add(
+              Add(
+                Number(9),
+                Number(10)
+              ),
+              Add(
+                Number(11),
+                Add(
+                  Number(12),
+                  Number(13)
+                )
+              )
+            )
+          )
+        )
+      ),
+      Add(
+        Add(
+          Number(14),
+          Add(
+            Number(15),
+            Add(
+              Add(
+                Number(16),
+                Number(17)
+              ),
+              Add(
+                Number(18),
+                Add(
+                  Number(19),
+                  Number(20)
+                )
+              )
+            )
+          )
+        ),
+        Add(
+          Number(21),
+          Add(
+            Number(22),
+            Add(
+              Add(
+                Number(23),
+                Number(24)
+              ),
+              Add(
+                Number(25),
+                Add(
+                  Number(26),
+                  Number(27)
+                )
+              )
             )
           )
         )

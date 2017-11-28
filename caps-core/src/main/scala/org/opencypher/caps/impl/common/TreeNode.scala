@@ -31,7 +31,6 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     */
   def childrenAsSet: Set[T] = children.toSet
 
-  // Optimization: Cache hash code, speeds up repeated computations over large trees.
   override final lazy val hashCode: Int = MurmurHash3.productHash(self)
 
   override final lazy val size: Int = {

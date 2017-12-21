@@ -15,6 +15,8 @@
  */
 package org.opencypher.caps.impl.common
 
+import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.reflect.ClassTag
 
 abstract class TreeRewriter[I <: TreeNode[I]: ClassTag, O <: TreeNode[O]: ClassTag] {
@@ -44,6 +46,67 @@ case class BottomUp[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) ext
     }
     if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
   }
+
+}
+
+/**
+  * Applies the given partial function starting from the leafs of this tree.
+  *
+  * Avoids using the stack
+  */
+case class OffStackBottomUp[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
+
+  def rewrite(in: T): T = {
+    @tailrec def offStackRewrite(tree: T, stack: List[Array[T]]): T = {
+
+      val childrenLength = tree.children.length
+      val afterChildren = if (childrenLength == 0) {
+        tree
+      } else {
+        val updatedChildren = {
+          val childrenCopy = new Array[T](childrenLength)
+          var i = 0
+          while (i < childrenLength) {
+            childrenCopy(i) = offStackRewrite(tree.children(i))
+
+            i += 1
+          }
+          childrenCopy
+        }
+        tree.withNewChildren(updatedChildren)
+      }
+      if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
+    }
+
+    offStackRewrite(in)
+  }
+
+//  @tailrec
+//  private def rec(stack: mutable.ArrayStack[(List[AnyRef], mutable.MutableList[AnyRef])]): mutable.MutableList[AnyRef] = {
+//    val (currentJobs, _) = stack.top
+//    if (currentJobs.isEmpty) {
+//      val (_, newChildren) = stack.pop()
+//      if (stack.isEmpty) {
+//        newChildren
+//      } else {
+//        val (job :: jobs, doneJobs) = stack.pop()
+//        val doneJob = job.dup(newChildren)
+//        val rewrittenDoneJob = doneJob.rewrite(rewriter)
+//        stack.push((jobs, doneJobs += rewrittenDoneJob))
+//        rec(stack)
+//      }
+//    } else {
+//      val next = currentJobs.head
+//      if (stopper(next)) {
+//        val (job :: jobs, doneJobs) = stack.pop()
+//        stack.push((jobs, doneJobs += job))
+//      } else {
+//        stack.push((next.children.toList, new mutable.MutableList()))
+//      }
+//      rec(stack)
+//    }
+//  }
+//}
 
 }
 

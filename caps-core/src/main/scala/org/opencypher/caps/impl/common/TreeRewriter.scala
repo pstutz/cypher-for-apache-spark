@@ -15,8 +15,6 @@
  */
 package org.opencypher.caps.impl.common
 
-import scala.annotation.tailrec
-import scala.collection.mutable
 import scala.reflect.ClassTag
 
 abstract class TreeRewriter[I <: TreeNode[I]: ClassTag, O <: TreeNode[O]: ClassTag] {
@@ -52,61 +50,40 @@ case class BottomUp[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) ext
 /**
   * Applies the given partial function starting from the leafs of this tree.
   *
-  * Avoids using the stack
+  * Avoids using the stack.
   */
-case class OffStackBottomUp[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
+final case class OffStackBottomUp[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
 
-  def rewrite(in: T): T = {
-    @tailrec def offStackRewrite(tree: T, stack: List[Array[T]]): T = {
-
-      val childrenLength = tree.children.length
-      val afterChildren = if (childrenLength == 0) {
-        tree
-      } else {
-        val updatedChildren = {
-          val childrenCopy = new Array[T](childrenLength)
-          var i = 0
-          while (i < childrenLength) {
-            childrenCopy(i) = offStackRewrite(tree.children(i))
-
-            i += 1
-          }
-          childrenCopy
-        }
-        tree.withNewChildren(updatedChildren)
-      }
-      if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
+  def depthFirstTraversal(tree: T): List[T] = {
+    var result = List.empty[T]
+    var nodesToProcess: List[T] = List[T](tree)
+    while (!nodesToProcess.isEmpty) {
+      val head :: tail = nodesToProcess
+      result = head :: result
+      nodesToProcess = tail ::: head.children.toList
     }
-
-    offStackRewrite(in)
+    result
   }
 
-//  @tailrec
-//  private def rec(stack: mutable.ArrayStack[(List[AnyRef], mutable.MutableList[AnyRef])]): mutable.MutableList[AnyRef] = {
-//    val (currentJobs, _) = stack.top
-//    if (currentJobs.isEmpty) {
-//      val (_, newChildren) = stack.pop()
-//      if (stack.isEmpty) {
-//        newChildren
-//      } else {
-//        val (job :: jobs, doneJobs) = stack.pop()
-//        val doneJob = job.dup(newChildren)
-//        val rewrittenDoneJob = doneJob.rewrite(rewriter)
-//        stack.push((jobs, doneJobs += rewrittenDoneJob))
-//        rec(stack)
-//      }
-//    } else {
-//      val next = currentJobs.head
-//      if (stopper(next)) {
-//        val (job :: jobs, doneJobs) = stack.pop()
-//        stack.push((jobs, doneJobs += job))
-//      } else {
-//        stack.push((next.children.toList, new mutable.MutableList()))
-//      }
-//      rec(stack)
-//    }
-//  }
-//}
+  def rewrite(in: T): T = {
+    val nodesToRewrite = depthFirstTraversal(in).iterator
+    var rewrittenNodes = List.empty[T]
+    while (nodesToRewrite.hasNext) {
+      val nextNodeToRewrite = nodesToRewrite.next
+      if (nextNodeToRewrite.children.isEmpty) {
+        val rewrittenNode = if (rule.isDefinedAt(nextNodeToRewrite)) rule(nextNodeToRewrite) else nextNodeToRewrite
+        rewrittenNodes = rewrittenNode :: rewrittenNodes
+      } else {
+        val (rewrittenChildren, remainingRewritten) = rewrittenNodes.splitAt(nextNodeToRewrite.children.length)
+        val updatedNextNode = nextNodeToRewrite.withNewChildren(rewrittenChildren.toArray)
+        val rewrittenNextNode =
+          if (rule.isDefinedAt(updatedNextNode)) rule(updatedNextNode) else updatedNextNode
+        rewrittenNodes = rewrittenNextNode :: remainingRewritten
+      }
+    }
+    assert(rewrittenNodes.size == 1)
+    rewrittenNodes.head
+  }
 
 }
 
@@ -134,6 +111,47 @@ case class TopDown[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) exte
       }
       afterSelf.withNewChildren(updatedChildren)
     }
+  }
+
+}
+
+/**
+  * Applies the given partial function starting from the root of this tree.
+  *
+  * Avoids using the stack.
+  */
+final case class OffStackTopDown[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
+
+  def depthFirstTraversal(tree: T): List[T] = {
+    var result = List.empty[T]
+    var nodesToProcess: List[T] = List[T](tree)
+    while (!nodesToProcess.isEmpty) {
+      val head :: tail = nodesToProcess
+      result = head :: result
+      nodesToProcess = tail ::: head.children.toList
+    }
+    result
+  }
+
+  def rewrite(in: T): T = {
+    var nodesToRewrite = depthFirstTraversal(in)
+    var rewrittenNodes = List.empty[T]
+    while (!nodesToRewrite.isEmpty) {
+      val nextNodeToRewrite :: remainingNodesToRewrite = nodesToRewrite
+      nodesToRewrite = remainingNodesToRewrite
+      if (nextNodeToRewrite.children.isEmpty) {
+        val rewrittenNode = if (rule.isDefinedAt(nextNodeToRewrite)) rule(nextNodeToRewrite) else nextNodeToRewrite
+        rewrittenNodes = rewrittenNode :: rewrittenNodes
+      } else {
+        val (rewrittenChildren, remainingRewritten) = rewrittenNodes.splitAt(nextNodeToRewrite.children.length)
+        val rewrittenNextNode =
+          if (rule.isDefinedAt(updatedNextNode)) rule(updatedNextNode) else updatedNextNode
+        val updatedNextNode = nextNodeToRewrite.withNewChildren(rewrittenChildren.toArray)
+        rewrittenNodes = rewrittenNextNode :: remainingRewritten
+      }
+    }
+    assert(rewrittenNodes.size == 1)
+    rewrittenNodes.head
   }
 
 }

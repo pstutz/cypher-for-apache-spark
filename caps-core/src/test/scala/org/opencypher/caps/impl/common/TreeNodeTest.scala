@@ -77,9 +77,9 @@ class TreeNodeTest extends FunSuite with Matchers {
       case class Unsupported(elems: List[Object]) extends AbstractTreeNode[Unsupported]
       val fail = Unsupported(List(Unsupported(List.empty), "2"))
     }.getMessage should equal(s"""Expected a list that contains either no children or only children
-        |but found a mixed list that contains a child as the head element,
-        |but also one with a non-child type: java.lang.String cannot be cast to ${classOf[AbstractTreeNode[_]].getName}.
-        |""".stripMargin)
+         |but found a mixed list that contains a child as the head element,
+         |but also one with a non-child type: java.lang.String cannot be cast to ${classOf[AbstractTreeNode[_]].getName}.
+         |""".stripMargin)
 
     // - there can be at most one list of children
     intercept[IllegalArgumentException] {
@@ -111,15 +111,27 @@ class TreeNodeTest extends FunSuite with Matchers {
     val down = TopDown[CalcExpr](addNoops).rewrite(calculation)
     down should equal(expected)
 
-    val up = BottomUp[CalcExpr](addNoops).rewrite(calculation)
-    up should equal(expected)
+    val upStack = BottomUp[CalcExpr](addNoops).rewrite(calculation)
+    upStack should equal(expected)
+
+    val upOffStack = OffStackBottomUp[CalcExpr](addNoops).rewrite(calculation)
+    upOffStack should equal(expected)
+
+    val reverseAdd: PartialFunction[CalcExpr, CalcExpr] = {
+      case Add(n1, n2) => Add(n2, n1)
+    }
+
+    val reversed = Add(Add(Number(3), Number(4)), Number(5))
+    TopDown[CalcExpr](reverseAdd).rewrite(calculation) should equal(reversed)
+    BottomUp[CalcExpr](reverseAdd).rewrite(calculation) should equal(reversed)
+    OffStackBottomUp[CalcExpr](reverseAdd).rewrite(calculation) should equal(reversed)
   }
 
   test("support relatively high trees without stack overflow") {
     val highTree = (1 to 1000).foldLeft(Number(1): CalcExpr) {
       case (t, n) => Add(t, Number(n))
     }
-    val simplified = BottomUp[CalcExpr] {
+    val simplified = OffStackBottomUp[CalcExpr] {
       case Add(Number(n1), Number(n2)) => Number(n1 + n2)
     }.rewrite(highTree)
     simplified should equal(Number(500501))

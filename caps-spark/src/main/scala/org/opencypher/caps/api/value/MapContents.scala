@@ -28,7 +28,7 @@ sealed trait EntityContents extends MapContents {
   def data: Data
 }
 
-final case class NodeContents(id: EntityId, labels: Seq[String], properties: Properties)
+final case class NodeContents(id: EntityId, labels: Set[String], properties: Properties)
   extends EntityContents {
 
   override type Data = NodeData

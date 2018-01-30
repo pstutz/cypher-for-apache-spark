@@ -158,8 +158,9 @@ object CTNode extends CTNode(Set.empty) with Serializable {
     if (labels.isEmpty) this else CTNode(labels.toSet)
 }
 
-sealed case class CTNode(labels: Set[String]) extends MaterialDefiniteCypherType {
+sealed trait CTEntity extends CypherType
 
+sealed case class CTNode(labels: Set[String]) extends MaterialDefiniteCypherType with CTEntity {
   self =>
 
   final override def name: String =
@@ -207,7 +208,7 @@ object CTRelationship extends CTRelationship(Set.empty) with Serializable {
     if (types.isEmpty) this else CTRelationship(types.toSet)
 }
 
-sealed case class CTRelationship(types: Set[String]) extends MaterialDefiniteCypherType {
+sealed case class CTRelationship(types: Set[String]) extends MaterialDefiniteCypherType with CTEntity {
 
   self =>
 
@@ -407,14 +408,16 @@ sealed trait CypherType extends Serializable {
   // (I) nullable (includes null) vs material
   //
 
+  final override def toString: String = name
+
   // true, if null is a value of this type
   def isNullable: Boolean
 
-  // false, if null is a value of this type
-  def isMaterial: Boolean
-
   // (II) definite (a single known type) vs a wildcard (standing for an arbitrary unknown type)
   //
+
+  // false, if null is a value of this type
+  def isMaterial: Boolean
 
   // true, if this type only (i.e. excluding type parameters) is not a wildcard
   def isDefinite: Boolean
@@ -423,8 +426,6 @@ sealed trait CypherType extends Serializable {
   def isWildcard: Boolean
 
   def isInhabited: Ternary = True
-
-  final override def toString: String = name
 
   def name: String
 
@@ -468,6 +469,9 @@ sealed trait CypherType extends Serializable {
     self.superTypeOf(other).maybeTrue || self.subTypeOf(other).maybeTrue
   }
 
+  final def subTypeOf(other: CypherType): Ternary =
+    other superTypeOf self
+
   def sameTypeAs(other: CypherType): Ternary =
     if (other.isWildcard)
       // wildcard types override sameTypeAs
@@ -475,9 +479,6 @@ sealed trait CypherType extends Serializable {
     else
       // we rely on final case class equality for different instances of the same type
       self == other
-
-  final def subTypeOf(other: CypherType): Ternary =
-    other superTypeOf self
 
   /**
     * A type U is a super type of a type V iff it holds

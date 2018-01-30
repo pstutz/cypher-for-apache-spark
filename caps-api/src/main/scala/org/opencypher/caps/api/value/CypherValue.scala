@@ -21,8 +21,29 @@ trait CypherValue {
   def cypherType: CypherType
 }
 
+trait CypherEntity extends CypherValue {
+  override def cypherType: CTEntity
+
+  def properties: CypherMap
+}
+
+trait CypherNode extends CypherEntity {
+  override def cypherType: CTNode
+
+  def labels: Set[String]
+}
+
+trait CypherRelationship extends CypherEntity {
+  override def cypherType: CTRelationship
+
+  def relationshipType: String
+}
+
 trait CypherList extends CypherValue {
   override def cypherType: CTList
+
+  // TODO: Type-safe access to elements with more specialized types
+  def values: Seq[CypherValue]
 }
 
 trait CypherBoolean extends CypherValue {
@@ -30,32 +51,49 @@ trait CypherBoolean extends CypherValue {
 }
 
 trait CypherInteger extends CypherValue {
-  def value: Long
-
   override def cypherType = CTInteger
+
+  def value: Long
 }
 
 trait CypherFloat extends CypherValue {
-  def value: Double
-
   override def cypherType = CTFloat
+
+  def value: Double
 }
 
 trait CypherString extends CypherValue {
-  def value: String
-
   override def cypherType = CTString
+
+  def value: String
 }
 
 trait CypherMap extends CypherValue {
+  override def cypherType = CTMap
+
   def get(key: String): Option[CypherValue]
 
   def keys: Set[String]
-
-  override def cypherType = CTMap
 }
 
 trait CypherPath extends CypherValue {
-
   override def cypherType = CTPath
+
+  def startingNode: CypherNode
+
+  def connections: List[CypherPath.Connection]
+}
+
+object CypherPath {
+
+  sealed trait Connection {
+    def node: CypherNode
+
+    def relationship: CypherRelationship
+  }
+
+  trait Forward extends Connection
+
+  trait Backward extends Connection
+
 }

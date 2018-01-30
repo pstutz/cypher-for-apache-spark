@@ -17,15 +17,13 @@ package org.opencypher.caps.api.value
 
 object EntityData {
 
-  object Creation extends Creation
-
   trait Creation {
-
-    def newNode: NodeData =
-      NodeData.empty
 
     def newLabeledNode(labels: String*): NodeData =
       newNode.withLabels(labels: _*)
+
+    def newNode: NodeData =
+      NodeData.empty
 
     def newUntypedRelationship(nodes: (CAPSNode, CAPSNode)): RelationshipData =
       newUntypedRelationship(nodes._1, nodes._2)
@@ -39,6 +37,8 @@ object EntityData {
     def newRelationship(startNode: CAPSNode, relType: String, endNode: CAPSNode): RelationshipData =
       RelationshipData(startNode.id, endNode.id, relType)
   }
+
+  object Creation extends Creation
 }
 
 sealed trait EntityData {
@@ -46,16 +46,16 @@ sealed trait EntityData {
 }
 
 object NodeData {
-  val empty = NodeData(labels = Seq.empty, properties = Properties.empty)
+  val empty = NodeData(labels = Set.empty, properties = Properties.empty)
 }
 
-final case class NodeData(labels: Seq[String],
+final case class NodeData(labels: Set[String],
                           properties: Properties)
   extends EntityData {
 
   override def asEntity(id: EntityId) = CAPSNode(id, labels, properties)
 
-  def withLabels(newLabels: String*): NodeData = copy(labels = newLabels.toSeq)
+  def withLabels(newLabels: String*): NodeData = copy(labels = newLabels.toSet)
   def withProperties(newProperties: (String, CAPSValue)*): NodeData = copy(properties = Properties(newProperties: _*))
   def withProperties(newProperties: Properties): NodeData = copy(properties = newProperties)
 }

@@ -19,7 +19,6 @@ import java.lang
 
 import cats.Show
 import org.opencypher.caps.api.exception.CypherValueException
-import org.opencypher.caps.api.graph._
 import org.opencypher.caps.api.types.CypherType.OrderGroups._
 import org.opencypher.caps.api.types.CypherType._
 import org.opencypher.caps.api.types.{CypherType, _}
@@ -46,6 +45,7 @@ sealed trait CAPSValueCompanion[V <: CAPSValue] extends Equiv[V] with Show[V] {
   // apply          - like create but supports null and other, non-canonical representations (like java types)
   // unapply        - same as contents
   //
+  final val reverseOrder = order.reverse
 
   def apply(v: Input): V
 
@@ -103,8 +103,6 @@ sealed trait CAPSValueCompanion[V <: CAPSValue] extends Equiv[V] with Show[V] {
       }
     }
   }
-
-  final val reverseOrder = order.reverse
 
   /**
     * Cypher orderability
@@ -226,16 +224,16 @@ case object CAPSValue extends CAPSValueCompanion[CAPSValue] {
         case v: CAPSPath => CAPSPath.contents(v)
       }
 
-  override def orderGroup(value: CAPSValue): OrderGroup =
-    if (isNull(value)) VoidOrderGroup
+  override def isOrContainsNull(value: CAPSValue): Boolean =
+    if (isNull(value)) true
     else
       value match {
-        case v: CAPSBoolean => CAPSBoolean.orderGroup(v)
-        case v: CAPSString => CAPSString.orderGroup(v)
-        case v: CAPSNumber => CAPSNumber.orderGroup(v)
-        case v: CAPSList => CAPSList.orderGroup(v)
-        case v: CAPSMap => CAPSMap.orderGroup(v)
-        case v: CAPSPath => CAPSPath.orderGroup(v)
+        case v: CAPSBoolean => CAPSBoolean.isOrContainsNull(v)
+        case v: CAPSString => CAPSString.isOrContainsNull(v)
+        case v: CAPSNumber => CAPSNumber.isOrContainsNull(v)
+        case v: CAPSList => CAPSList.isOrContainsNull(v)
+        case v: CAPSMap => CAPSMap.isOrContainsNull(v)
+        case v: CAPSPath => CAPSPath.isOrContainsNull(v)
       }
 
   protected[value] def computeOrder(l: CAPSValue, r: CAPSValue): Int = {
@@ -255,6 +253,18 @@ case object CAPSValue extends CAPSValueCompanion[CAPSValue] {
       cmp
   }
 
+  override def orderGroup(value: CAPSValue): OrderGroup =
+    if (isNull(value)) VoidOrderGroup
+    else
+      value match {
+        case v: CAPSBoolean => CAPSBoolean.orderGroup(v)
+        case v: CAPSString => CAPSString.orderGroup(v)
+        case v: CAPSNumber => CAPSNumber.orderGroup(v)
+        case v: CAPSList => CAPSList.orderGroup(v)
+        case v: CAPSMap => CAPSMap.orderGroup(v)
+        case v: CAPSPath => CAPSPath.orderGroup(v)
+      }
+
   //TODO: Try to remove
   protected[value] override def computeCompare(l: CAPSValue, r: CAPSValue): Int = (l, r) match {
     case (a: CAPSBoolean, b: CAPSBoolean) => CAPSBoolean.computeCompare(a, b)
@@ -266,18 +276,6 @@ case object CAPSValue extends CAPSValueCompanion[CAPSValue] {
     case _ =>
       throw CypherValueException(s"Comparison between `$l` and `$r` is undefined")
   }
-
-  override def isOrContainsNull(value: CAPSValue): Boolean =
-    if (isNull(value)) true
-    else
-      value match {
-        case v: CAPSBoolean => CAPSBoolean.isOrContainsNull(v)
-        case v: CAPSString => CAPSString.isOrContainsNull(v)
-        case v: CAPSNumber => CAPSNumber.isOrContainsNull(v)
-        case v: CAPSList => CAPSList.isOrContainsNull(v)
-        case v: CAPSMap => CAPSMap.isOrContainsNull(v)
-        case v: CAPSPath => CAPSPath.isOrContainsNull(v)
-      }
 }
 
 sealed trait CAPSValue extends CypherValue {
@@ -435,8 +433,6 @@ case object CAPSInteger extends CAPSNumberCompanion[CAPSInteger] {
 final class CAPSInteger(val v: Long) extends CAPSNumber with CypherInteger with Serializable {
   override def hashCode(): Int = value.hashCode()
 
-  def value = v
-
   override def equals(obj: scala.Any): Boolean = obj match {
     case other: CAPSInteger => CAPSInteger.equiv(this, other)
     case other: CAPSNumber => CAPSNumber.equiv(this, other)
@@ -444,6 +440,8 @@ final class CAPSInteger(val v: Long) extends CAPSNumber with CypherInteger with 
   }
 
   override def toString: String = s"$value"
+
+  def value = v
 }
 
 // *** FLOAT ***
@@ -490,8 +488,7 @@ case object CAPSList extends CAPSValueCompanion[CAPSList] {
 
   override type Contents = Seq[CAPSValue]
   override type Input = Any
-
-  object empty extends CAPSList(Seq.empty)
+  private val valueListOrderability = Ordering.Iterable(CAPSValue.order)
 
   override def apply(value: Input): CAPSList = value match {
     case null => cypherNull
@@ -517,29 +514,30 @@ case object CAPSList extends CAPSValueCompanion[CAPSList] {
   override def isOrContainsNull(value: CAPSList): Boolean =
     isNull(value) || value.cachedIsOrContainsNulls
 
-  override protected[value] def computeOrder(l: CAPSList, r: CAPSList): Int =
-    valueListOrderability.compare(l.v, r.v)
-
   // Values in the same order group are ordered (sorted) together by orderability
   override def orderGroup(value: CAPSList): OrderGroup =
     if (isNull(value)) VoidOrderGroup else ListOrderGroup
 
-  private val valueListOrderability = Ordering.Iterable(CAPSValue.order)
+  override protected[value] def computeOrder(l: CAPSList, r: CAPSList): Int =
+    valueListOrderability.compare(l.v, r.v)
+
+  object empty extends CAPSList(Seq.empty)
+
 }
 
-sealed class CAPSList(private[CAPSList] val v: Seq[CAPSValue]) extends CAPSValue with Serializable {
+sealed class CAPSList(private[CAPSList] val v: Seq[CAPSValue]) extends CAPSValue with CypherList with Serializable {
+  @transient
+  private[CAPSList] lazy val cachedIsOrContainsNulls: Boolean =
+    v.exists(CAPSValue.isOrContainsNull)
+  @transient
+  private[CAPSList] lazy val cachedElementType: CypherType =
+    v.map(CAPSValue.cypherType).reduceOption(_ join _).getOrElse(CTVoid)
+
+  override def values = v
 
   override def cypherType = CTList(cachedElementType)
 
   def map[B](f: CAPSValue => B): TraversableOnce[B] = v.map(f)
-
-  @transient
-  private[CAPSList] lazy val cachedIsOrContainsNulls: Boolean =
-    v.exists(CAPSValue.isOrContainsNull)
-
-  @transient
-  private[CAPSList] lazy val cachedElementType: CypherType =
-    v.map(CAPSValue.cypherType).reduceOption(_ join _).getOrElse(CTVoid)
 
   override def hashCode(): Int = v.hashCode()
 
@@ -566,6 +564,7 @@ sealed class CAPSList(private[CAPSList] val v: Seq[CAPSValue]) extends CAPSValue
     builder.append(']')
     builder.result()
   }
+
 }
 
 // *** MAP
@@ -585,8 +584,8 @@ case object CAPSMap extends CAPSMapCompanion[CAPSMap] {
 
   override type Contents = MapContents
   override type Input = Any
-
-  object empty extends CAPSMap(Properties.empty)
+  private val mapEntryOrdering =
+    Ordering.Iterable(Ordering.Tuple2(Ordering.String, CAPSValue.order))
 
   override def apply(value: Input): CAPSMap = value match {
     case null => cypherNull
@@ -650,21 +649,21 @@ case object CAPSMap extends CAPSMapCompanion[CAPSMap] {
     case (a: CAPSMap, b: CAPSMap) => mapEntryOrdering.compare(l.properties.m, r.properties.m)
   }
 
-  private val mapEntryOrdering =
-    Ordering.Iterable(Ordering.Tuple2(Ordering.String, CAPSValue.order))
+  object empty extends CAPSMap(Properties.empty)
+
 }
 
 sealed class CAPSMap(protected[value] val properties: Properties) extends CAPSValue with CypherMap with Serializable {
+
+  @transient
+  protected[value] lazy val cachedIsOrContainsNulls: Boolean =
+    properties.m.values.exists(CAPSValue.isOrContainsNull)
 
   def get(key: String): Option[CAPSValue] = properties.get(key)
 
   def keys: Set[String] = properties.m.keySet
 
   def values: Iterable[CAPSValue] = properties.m.values
-
-  @transient
-  protected[value] lazy val cachedIsOrContainsNulls: Boolean =
-    properties.m.values.exists(CAPSValue.isOrContainsNull)
 
   override def hashCode(): Int = properties.hashCode()
 
@@ -772,11 +771,11 @@ case object CAPSNode extends CAPSEntityCompanion[CAPSNode] {
   def apply(id: EntityId, data: NodeData = NodeData.empty): CAPSNode =
     apply(id, data.labels, data.properties)
 
-  def apply(id: EntityId, labels: Seq[String], properties: Properties): CAPSNode =
-    new CAPSNode(id, labels, properties)
-
   def create(contents: NodeContents): CAPSNode =
     apply(contents.id, contents.labels, contents.properties)
+
+  def apply(id: EntityId, labels: Set[String], properties: Properties): CAPSNode =
+    new CAPSNode(id, labels, properties)
 
   override def contents(value: CAPSNode): Option[Contents] =
     if (value == null) None else Some(NodeContents(value.id, value.labels, value.properties))
@@ -784,20 +783,19 @@ case object CAPSNode extends CAPSEntityCompanion[CAPSNode] {
   override def cypherType(value: CAPSNode): CypherType with DefiniteCypherType =
     if (value == null) CTNull else CTNode(labels(value).toSeq.flatten: _*)
 
+  def labels(node: CAPSNode): Option[Set[String]] =
+    if (isNull(node)) None else Some(node.labels)
+
   // Values in the same order group are ordered (sorted) together by orderability
   override def orderGroup(value: CAPSNode): OrderGroup =
     if (isNull(value)) VoidOrderGroup else NodeOrderGroup
-
-  def labels(node: CAPSNode): Option[Seq[String]] =
-    if (isNull(node)) None else Some(node.labels)
 }
 
 sealed class CAPSNode(
-                         protected[value] val id: EntityId,
-                         // TODO: Use Set once available in Spark 2.3
-                         protected[value] val labels: Seq[String],
-                         override protected[value] val properties: Properties)
-  extends CAPSEntityValue(properties)
+  protected[value] val id: EntityId,
+  val labels: Set[String],
+  override protected[value] val properties: Properties)
+  extends CAPSEntityValue(properties) with CypherNode
     with Serializable {
 
   override def hashCode(): Int = id.hashCode()
@@ -807,13 +805,13 @@ sealed class CAPSNode(
     case _ => false
   }
 
-  override protected[value] def data = NodeData(labels, properties.m)
-
   override def toString = {
     val lbls = if (labels.isEmpty) "" else labels.mkString(":", ":", "")
     val props = if (properties.isEmpty) "" else super.toString
     Seq(lbls, props).filter(_.nonEmpty).mkString("(", " ", ")")
   }
+
+  override protected[value] def data = NodeData(labels, properties.m)
 }
 
 // *** RELATIONSHIP
@@ -825,16 +823,16 @@ case object CAPSRelationship extends CAPSEntityCompanion[CAPSRelationship] {
   def apply(id: EntityId, data: RelationshipData): CAPSRelationship =
     new CAPSRelationship(id, data.startId, data.endId, data.relationshipType, data.properties)
 
-  def apply(
-             id: EntityId,
-             startId: EntityId,
-             endId: EntityId,
-             relType: String,
-             properties: Properties): CAPSRelationship =
-    new CAPSRelationship(id, startId, endId, relType, properties)
-
   def create(contents: RelationshipContents): CAPSRelationship =
     apply(contents.id, contents.startId, contents.endId, contents.relationshipType, contents.properties)
+
+  def apply(
+    id: EntityId,
+    startId: EntityId,
+    endId: EntityId,
+    relType: String,
+    properties: Properties): CAPSRelationship =
+    new CAPSRelationship(id, startId, endId, relType, properties)
 
   override def contents(value: CAPSRelationship): Option[RelationshipContents] =
     if (isNull(value))
@@ -845,12 +843,12 @@ case object CAPSRelationship extends CAPSEntityCompanion[CAPSRelationship] {
   override def cypherType(value: CAPSRelationship): CypherType with DefiniteCypherType =
     if (isNull(value)) CTNull else relationshipType(value).map(t => CTRelationship(t)).getOrElse(CTRelationship)
 
+  def relationshipType(value: CAPSRelationship): Option[String] =
+    if (isNull(value)) None else Some(value.relationshipType)
+
   // Values in the same order group are ordered (sorted) together by orderability
   override def orderGroup(value: CAPSRelationship): OrderGroup =
     if (isNull(value)) VoidOrderGroup else RelationshipOrderGroup
-
-  def relationshipType(value: CAPSRelationship): Option[String] =
-    if (isNull(value)) None else Some(value.relationshipType)
 
   def startId(value: CAPSRelationship): Option[EntityId] =
     if (isNull(value)) None else Some(value.startId)
@@ -860,12 +858,12 @@ case object CAPSRelationship extends CAPSEntityCompanion[CAPSRelationship] {
 }
 
 sealed class CAPSRelationship(
-                                 protected[value] val id: EntityId,
-                                 protected[value] val startId: EntityId,
-                                 protected[value] val endId: EntityId,
-                                 protected[value] val relationshipType: String,
-                                 override protected[value] val properties: Properties)
-  extends CAPSEntityValue(properties)
+  protected[value] val id: EntityId,
+  protected[value] val startId: EntityId,
+  protected[value] val endId: EntityId,
+  protected[value] val relationshipType: String,
+  override protected[value] val properties: Properties)
+  extends CAPSEntityValue(properties) with CypherRelationship
     with Serializable {
 
   override def hashCode(): Int = id.hashCode()
@@ -875,12 +873,12 @@ sealed class CAPSRelationship(
     case _ => false
   }
 
-  override protected[value] def data = RelationshipData(startId, endId, relationshipType, properties.m)
-
   override def toString = {
     val props = if (properties.isEmpty) "" else s" ${super.toString}"
     s"[:$relationshipType$props]"
   }
+
+  override protected[value] def data = RelationshipData(startId, endId, relationshipType, properties.m)
 }
 
 // *** Path
@@ -889,6 +887,7 @@ case object CAPSPath extends CAPSValueCompanion[CAPSPath] {
 
   override type Contents = Seq[CAPSEntityValue]
   override type Input = Contents
+  private val pathOrdering = Ordering.Iterable(CAPSEntityCompanion.order)
 
   def apply(value: Input): CAPSPath = value match {
     case null => cypherNull
@@ -909,16 +908,20 @@ case object CAPSPath extends CAPSValueCompanion[CAPSPath] {
   override def orderGroup(value: CAPSPath): OrderGroup =
     if (isNull(value)) VoidOrderGroup else PathOrderGroup
 
-  override protected[value] def computeOrder(l: CAPSPath, r: CAPSPath): Int =
-    pathOrdering.compare(l.elements, r.elements)
-
-  private val pathOrdering = Ordering.Iterable(CAPSEntityCompanion.order)
-
   // A path containing null entities is malformed and therefore not considered here
   override def isOrContainsNull(v: CAPSPath): Boolean = isNull(v)
+
+  override protected[value] def computeOrder(l: CAPSPath, r: CAPSPath): Int =
+    pathOrdering.compare(l.elements, r.elements)
 }
 
 sealed class CAPSPath(protected[value] val elements: Seq[CAPSEntityValue]) extends CAPSValue with CypherPath with Serializable {
+
+  // TODO: Implement CypherPath API
+  override def startingNode: CypherNode = ???
+
+  // TODO: Implement CypherPath API
+  override def connections: List[CypherPath.Connection] = ???
 
   override def hashCode(): Int = elements.hashCode()
 

@@ -18,7 +18,7 @@ package org.opencypher.caps.api.graph
 import org.opencypher.caps.api.schema.Schema
 import org.opencypher.caps.api.types.{CTNode, CTRelationship}
 import org.opencypher.caps.api.value.CypherValue.CypherMap
-import org.opencypher.caps.impl.record.CypherRecords
+import org.opencypher.caps.impl.record.CypherTable
 
 /**
   * A Property Graph as defined by the openCypher Property Graph Model.
@@ -47,7 +47,7 @@ trait PropertyGraph {
     */
   def session: CypherSession
 
-  def nodes(name: String): CypherRecords = nodes(name, CTNode)
+  def nodes(name: String): CypherTable = nodes(name, CTNode)
 
   /**
     * Constructs a scan table of all the nodes in this graph with the given cypher type.
@@ -55,9 +55,9 @@ trait PropertyGraph {
     * @param name the field name for the returned nodes.
     * @return a table of nodes of the specified type.
     */
-  def nodes(name: String, nodeCypherType: CTNode): CypherRecords
+  def nodes(name: String, nodeCypherType: CTNode): CypherTable
 
-  def relationships(name: String): CypherRecords = relationships(name, CTRelationship)
+  def relationships(name: String): CypherTable = relationships(name, CTRelationship)
 
   /**
     * Constructs a scan table of all the relationships in this graph with the given cypher type.
@@ -65,7 +65,7 @@ trait PropertyGraph {
     * @param name the field name for the returned relationships.
     * @return a table of relationships of the specified type.
     */
-  def relationships(name: String, relCypherType: CTRelationship): CypherRecords
+  def relationships(name: String, relCypherType: CTRelationship): CypherTable
 
   /**
     * Executes a Cypher query in the session that manages this graph, using this graph as the ambient graph.

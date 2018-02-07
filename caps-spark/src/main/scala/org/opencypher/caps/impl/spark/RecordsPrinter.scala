@@ -17,7 +17,7 @@ package org.opencypher.caps.impl.spark
 
 import java.util.Objects
 
-import org.opencypher.caps.impl.record.CypherRecords
+import org.opencypher.caps.impl.record.CypherTable
 import org.opencypher.caps.impl.util.PrintOptions
 
 object RecordsPrinter {
@@ -26,7 +26,7 @@ object RecordsPrinter {
     * Prints the given SparkCypherRecords to stdout
     * @param records the records to be printed.
     */
-  def print(records: CypherRecords)(implicit options: PrintOptions): Unit = {
+  def print(records: CypherTable)(implicit options: PrintOptions): Unit = {
     val fieldContents = records.header.fieldsInOrder
     val factor = if (fieldContents.size > 1) fieldContents.size else 1
 

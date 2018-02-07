@@ -21,7 +21,7 @@ import org.opencypher.caps.api.exception.IllegalArgumentException
 import org.opencypher.caps.api.graph.PropertyGraph
 import org.opencypher.caps.api.schema.{EntityTable, NodeTable, Schema}
 import org.opencypher.caps.api.types.{CTNode, CTRelationship}
-import org.opencypher.caps.impl.record.{OpaqueField, RecordHeader, _}
+import org.opencypher.caps.impl.record.{OpaqueField, TableHeader, _}
 import org.opencypher.caps.impl.spark.CAPSConverters._
 import org.opencypher.caps.ir.api.expr._
 
@@ -77,7 +77,7 @@ object CAPSGraph {
     new CAPSScanGraph(allTables, schema)
   }
 
-  def create(records: CypherRecords, schema: Schema)(implicit caps: CAPSSession): CAPSGraph = {
+  def create(records: CypherTable, schema: Schema)(implicit caps: CAPSSession): CAPSGraph = {
     val capsRecords = records.asCaps
     new CAPSPatternGraph(capsRecords, schema)
   }
@@ -130,10 +130,10 @@ object CAPSGraph {
     override val schema: Schema = Schema.empty
 
     override def nodes(name: String, cypherType: CTNode): CAPSRecords =
-      CAPSRecords.empty(RecordHeader.from(OpaqueField(Var(name)(cypherType))))
+      CAPSRecords.empty(TableHeader.from(OpaqueField(Var(name)(cypherType))))
 
     override def relationships(name: String, cypherType: CTRelationship): CAPSRecords =
-      CAPSRecords.empty(RecordHeader.from(OpaqueField(Var(name)(cypherType))))
+      CAPSRecords.empty(TableHeader.from(OpaqueField(Var(name)(cypherType))))
 
     override def union(other: PropertyGraph): CAPSGraph = other.asCaps
   }

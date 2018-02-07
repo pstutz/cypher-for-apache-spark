@@ -18,7 +18,7 @@ package org.opencypher.caps.impl.spark
 import org.opencypher.caps.api.CAPSSession
 import org.opencypher.caps.api.exception.UnsupportedOperationException
 import org.opencypher.caps.api.graph.{CypherResult, CypherSession, PropertyGraph}
-import org.opencypher.caps.impl.record.{CypherRecordHeader, CypherRecords, RecordHeader}
+import org.opencypher.caps.impl.record.{CypherTableHeader, CypherTable, TableHeader}
 
 object CAPSConverters {
 
@@ -43,16 +43,16 @@ object CAPSConverters {
     }
   }
 
-  implicit class RichCypherRecords(records: CypherRecords) {
+  implicit class RichCypherRecords(records: CypherTable) {
     def asCaps: CAPSRecords = records match {
       case caps: CAPSRecords => caps
       case _                 => throw UnsupportedOperationException(s"can only handle CAPS records, got $records")
     }
   }
 
-  implicit class RichCypherHeader(header: CypherRecordHeader) {
-    def asCaps: RecordHeader = header match {
-      case caps: RecordHeader => caps
+  implicit class RichCypherHeader(header: CypherTableHeader) {
+    def asCaps: TableHeader = header match {
+      case caps: TableHeader => caps
       case _                  => throw UnsupportedOperationException(s"can only handle CORA record header, got $header")
     }
   }

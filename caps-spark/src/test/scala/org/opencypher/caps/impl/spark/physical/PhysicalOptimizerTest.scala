@@ -19,7 +19,7 @@ import java.net.URI
 
 import org.opencypher.caps.api.schema.Schema
 import org.opencypher.caps.api.types.CTNode
-import org.opencypher.caps.impl.record.RecordHeader
+import org.opencypher.caps.impl.record.TableHeader
 import org.opencypher.caps.impl.spark.CAPSConverters._
 import org.opencypher.caps.impl.spark.CAPSRecords
 import org.opencypher.caps.impl.spark.physical.operators._
@@ -29,7 +29,7 @@ import org.opencypher.caps.test.CAPSTestSuite
 import org.opencypher.caps.test.fixture.GraphCreationFixture
 
 class PhysicalOptimizerTest extends CAPSTestSuite with GraphCreationFixture {
-  val emptyRecords = CAPSRecords.empty(RecordHeader.empty)
+  val emptyRecords = CAPSRecords.empty(TableHeader.empty)
   val emptyGraph = LogicalExternalGraph("foo", URI.create("example.com"), Schema.empty)
 
   test("Test insert Cache operators") {
@@ -39,32 +39,32 @@ class PhysicalOptimizerTest extends CAPSTestSuite with GraphCreationFixture {
           Start(emptyRecords, emptyGraph),
           emptyGraph,
           Var("C")(CTNode),
-          RecordHeader.empty
+          TableHeader.empty
         ),
         Scan(
           Start(emptyRecords, emptyGraph),
           emptyGraph,
           Var("B")(CTNode),
-          RecordHeader.empty
+          TableHeader.empty
         ),
-        RecordHeader.empty
+        TableHeader.empty
       ),
       CartesianProduct(
         Scan(
           Start(emptyRecords, emptyGraph),
           emptyGraph,
           Var("C")(CTNode),
-          RecordHeader.empty
+          TableHeader.empty
         ),
         Scan(
           Start(emptyRecords, emptyGraph),
           emptyGraph,
           Var("B")(CTNode),
-          RecordHeader.empty
+          TableHeader.empty
         ),
-        RecordHeader.empty
+        TableHeader.empty
       ),
-      RecordHeader.empty
+      TableHeader.empty
     )
 
     implicit val context = PhysicalOptimizerContext()
@@ -78,15 +78,15 @@ class PhysicalOptimizerTest extends CAPSTestSuite with GraphCreationFixture {
               Start(emptyRecords, emptyGraph),
               emptyGraph,
               Var("C")(CTNode),
-              RecordHeader.empty
+              TableHeader.empty
             ),
             Scan(
               Start(emptyRecords, emptyGraph),
               emptyGraph,
               Var("B")(CTNode),
-              RecordHeader.empty
+              TableHeader.empty
             ),
-            RecordHeader.empty
+            TableHeader.empty
           )
         ),
         Cache(
@@ -95,18 +95,18 @@ class PhysicalOptimizerTest extends CAPSTestSuite with GraphCreationFixture {
               Start(emptyRecords, emptyGraph),
               emptyGraph,
               Var("C")(CTNode),
-              RecordHeader.empty
+              TableHeader.empty
             ),
             Scan(
               Start(emptyRecords, emptyGraph),
               emptyGraph,
               Var("B")(CTNode),
-              RecordHeader.empty
+              TableHeader.empty
             ),
-            RecordHeader.empty
+            TableHeader.empty
           )
         ),
-        RecordHeader.empty
+        TableHeader.empty
       )
     )
   }

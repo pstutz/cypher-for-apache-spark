@@ -122,7 +122,7 @@ class CAPSRecordsTest extends CAPSTestSuite with GraphCreationFixture {
 
   test("can not construct records with data/header column name conflict") {
     val data = session.createDataFrame(Seq((1, "foo"), (2, "bar"))).toDF("int", "string")
-    val header = RecordHeader.from(OpaqueField(Var("int")()), OpaqueField(Var("notString")()))
+    val header = TableHeader.from(OpaqueField(Var("int")()), OpaqueField(Var("notString")()))
 
     a[CypherException] shouldBe thrownBy {
       CAPSRecords.verifyAndCreate(header, data)
@@ -131,7 +131,7 @@ class CAPSRecordsTest extends CAPSTestSuite with GraphCreationFixture {
 
   test("can construct records with matching data/header") {
     val data = session.createDataFrame(Seq((1L, "foo"), (2L, "bar"))).toDF("int", "string")
-    val header = RecordHeader.from(OpaqueField(Var("int")(CTInteger)), OpaqueField(Var("string")(CTString)))
+    val header = TableHeader.from(OpaqueField(Var("int")(CTInteger)), OpaqueField(Var("string")(CTString)))
 
     val records = CAPSRecords.verifyAndCreate(header, data) // no exception is thrown
     records.data.select("int").collect() should equal(Array(Row(1), Row(2)))

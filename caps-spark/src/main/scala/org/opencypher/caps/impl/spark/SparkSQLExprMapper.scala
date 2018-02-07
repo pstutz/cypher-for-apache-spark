@@ -21,7 +21,7 @@ import org.apache.spark.sql.types._
 import org.opencypher.caps.api.exception._
 import org.opencypher.caps.api.types._
 import org.opencypher.caps.api.value.CypherValue._
-import org.opencypher.caps.impl.record.RecordHeader
+import org.opencypher.caps.impl.record.TableHeader
 import org.opencypher.caps.impl.spark.convert.SparkUtils._
 import org.opencypher.caps.impl.spark.physical.RuntimeContext
 import org.opencypher.caps.impl.spark.physical.operators.PhysicalOperator.columnName
@@ -31,11 +31,11 @@ object SparkSQLExprMapper {
 
   implicit class RichExpression(expr: Expr) {
 
-    def verify(implicit header: RecordHeader) = {
+    def verify(implicit header: TableHeader) = {
       if (header.slotsFor(expr).isEmpty) throw IllegalStateException(s"No slot for expression $expr")
     }
 
-    def column(implicit header: RecordHeader, dataFrame: DataFrame, context: RuntimeContext): Column = {
+    def column(implicit header: TableHeader, dataFrame: DataFrame, context: RuntimeContext): Column = {
       expr match {
         case p@Param(name) if p.cypherType.subTypeOf(CTList(CTAny)).maybeTrue =>
           context.parameters(name) match {
@@ -72,7 +72,7 @@ object SparkSQLExprMapper {
       *   - We never have multiple types per column in CAPS (yet)
       */
     def compare(comparator: Column => (Column => Column), lhs: Expr, rhs: Expr)
-      (implicit header: RecordHeader, df: DataFrame, context: RuntimeContext): Column = {
+      (implicit header: TableHeader, df: DataFrame, context: RuntimeContext): Column = {
       comparator(lhs.column)(rhs.column)
     }
 
@@ -92,7 +92,7 @@ object SparkSQLExprMapper {
       * @param context context with helper functions, such as column names.
       * @return Some Spark SQL expression if the input was mappable, otherwise None.
       */
-    def asSparkSQLExpr(implicit header: RecordHeader, df: DataFrame, context: RuntimeContext): Column = {
+    def asSparkSQLExpr(implicit header: TableHeader, df: DataFrame, context: RuntimeContext): Column = {
 
       expr match {
         case ListLit(exprs) =>

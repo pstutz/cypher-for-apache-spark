@@ -44,8 +44,8 @@ import org.opencypher.caps.ir.api.{Label, PropertyKey}
 import scala.annotation.tailrec
 import scala.reflect.runtime.universe.TypeTag
 
-sealed abstract class CAPSRecords(override val header: RecordHeader, val data: DataFrame)
-  (implicit val caps: CAPSSession) extends CypherRecords with Serializable {
+sealed abstract class CAPSRecords(override val header: TableHeader, val data: DataFrame)
+  (implicit val caps: CAPSSession) extends CypherTable with Serializable {
 
   override def print(implicit options: PrintOptions): Unit =
     RecordsPrinter.print(this)
@@ -102,7 +102,7 @@ sealed abstract class CAPSRecords(override val header: RecordHeader, val data: D
     }
   }
 
-  def unionAll(header: RecordHeader, other: CAPSRecords): CAPSRecords = {
+  def unionAll(header: TableHeader, other: CAPSRecords): CAPSRecords = {
     val unionData = data.union(other.data)
     CAPSRecords.verifyAndCreate(header, unionData)
   }
@@ -153,7 +153,7 @@ sealed abstract class CAPSRecords(override val header: RecordHeader, val data: D
     * @param targetHeader the header to align with
     * @return a new instance of `CAPSRecords` aligned with the argument header
     */
-  def alignWith(v: Var, targetHeader: RecordHeader): CAPSRecords = {
+  def alignWith(v: Var, targetHeader: TableHeader): CAPSRecords = {
     val oldEntity = this.header.internalHeader.fields.headOption
       .getOrElse(throw IllegalStateException("GraphScan table did not contain any fields"))
     val entityLabels: Set[String] = oldEntity.cypherType match {
@@ -327,21 +327,21 @@ object CAPSRecords {
       case slot =>
         slot.content
     }
-    val newHeader = RecordHeader.from(slotContents: _*)
+    val newHeader = TableHeader.from(slotContents: _*)
     val renamed = sourceDataFrame.toDF(newHeader.internalHeader.columns: _*)
 
     CAPSRecords.createInternal(newHeader, renamed)
   }
 
   /**
-    * Validates the data types within the DataFrame for compatibility, creates an initial [[RecordHeader]] and aligns
+    * Validates the data types within the DataFrame for compatibility, creates an initial [[TableHeader]] and aligns
     * the data frame column names according to that header.
     *
     * @param initialDataFrame initial data frame containing source data
     * @param caps             caps session
     * @return record header and according data frame
     */
-  private def prepareDataFrame(initialDataFrame: DataFrame)(implicit caps: CAPSSession): (RecordHeader, DataFrame) = {
+  private def prepareDataFrame(initialDataFrame: DataFrame)(implicit caps: CAPSSession): (TableHeader, DataFrame) = {
     val withCompatibleTypes = generalizeColumnTypes(initialDataFrame)
     val initialHeader = CAPSRecordHeader.fromSparkStructType(withCompatibleTypes.schema)
     val withRenamedColumns = withCompatibleTypes.toDF(initialHeader.internalHeader.columns: _*)
@@ -369,7 +369,7 @@ object CAPSRecords {
     * @param caps          CAPS session
     * @return CAPSRecords representing the input
     */
-  def verifyAndCreate(headerAndData: (RecordHeader, DataFrame))(implicit caps: CAPSSession): CAPSRecords = {
+  def verifyAndCreate(headerAndData: (TableHeader, DataFrame))(implicit caps: CAPSSession): CAPSRecords = {
     verifyAndCreate(headerAndData._1, headerAndData._2)
   }
 
@@ -382,7 +382,7 @@ object CAPSRecords {
     * @param caps          CAPS session
     * @return CAPSRecords representing the input
     */
-  def verifyAndCreate(initialHeader: RecordHeader, initialData: DataFrame)(implicit caps: CAPSSession): CAPSRecords = {
+  def verifyAndCreate(initialHeader: TableHeader, initialData: DataFrame)(implicit caps: CAPSSession): CAPSRecords = {
     if (initialData.sparkSession != caps.sparkSession) {
       throw IllegalArgumentException(
         "a DataFrame belonging to the same Spark session",
@@ -429,7 +429,7 @@ object CAPSRecords {
     createInternal(initialHeader, initialData)
   }
 
-  def empty(initialHeader: RecordHeader = RecordHeader.empty)(implicit caps: CAPSSession): CAPSRecords = {
+  def empty(initialHeader: TableHeader = TableHeader.empty)(implicit caps: CAPSSession): CAPSRecords = {
     val initialSparkStructType = CAPSRecordHeader.asSparkStructType(initialHeader)
     val initialDataFrame = caps.sparkSession.createDataFrame(Collections.emptyList[Row](), initialSparkStructType)
     createInternal(initialHeader, initialDataFrame)
@@ -437,11 +437,11 @@ object CAPSRecords {
 
   def unit()(implicit caps: CAPSSession): CAPSRecords = {
     val initialDataFrame = caps.sparkSession.createDataFrame(Seq(EmptyRow()))
-    createInternal(RecordHeader.empty, initialDataFrame)
+    createInternal(TableHeader.empty, initialDataFrame)
   }
 
 
-  private def createInternal(header: RecordHeader, data: DataFrame)(implicit caps: CAPSSession) =
+  private def createInternal(header: TableHeader, data: DataFrame)(implicit caps: CAPSSession) =
     new CAPSRecords(header, data) {}
 
   @tailrec

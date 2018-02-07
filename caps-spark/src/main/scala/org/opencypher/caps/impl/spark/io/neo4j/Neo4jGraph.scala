@@ -26,7 +26,7 @@ import org.opencypher.caps.api.graph.PropertyGraph
 import org.opencypher.caps.api.schema.Schema
 import org.opencypher.caps.api.types.{CTNode, CTRelationship, CypherType}
 import org.opencypher.caps.api.value.CypherValue
-import org.opencypher.caps.impl.record.{CAPSRecordHeader, RecordHeader}
+import org.opencypher.caps.impl.record.{CAPSRecordHeader, TableHeader}
 import org.opencypher.caps.impl.spark.io.neo4j.Neo4jGraph.{filterNode, filterRel, nodeToRow, relToRow}
 import org.opencypher.caps.impl.spark.{CAPSGraph, CAPSRecords, SparkColumnName}
 import org.opencypher.caps.ir.api.PropertyKey
@@ -62,7 +62,7 @@ class Neo4jGraph(val schema: Schema, val session: CAPSSession)(
       targetNode)
 
   override def nodes(name: String, cypherType: CTNode): CAPSRecords = {
-    val header = RecordHeader.nodeFromSchema(Var(name)(cypherType), schema)
+    val header = TableHeader.nodeFromSchema(Var(name)(cypherType), schema)
 
     computeRecords(name, cypherType, header) { (header, struct) =>
       inputNodes.filter(filterNode(cypherType)).map(nodeToRow(header, struct))
@@ -70,7 +70,7 @@ class Neo4jGraph(val schema: Schema, val session: CAPSSession)(
   }
 
   override def relationships(name: String, cypherType: CTRelationship): CAPSRecords = {
-    val header = RecordHeader.relationshipFromSchema(Var(name)(cypherType), schema)
+    val header = TableHeader.relationshipFromSchema(Var(name)(cypherType), schema)
 
     computeRecords(name, cypherType, header) { (header, struct) =>
       inputRels.filter(filterRel(cypherType)).map(relToRow(header, struct))
@@ -80,8 +80,8 @@ class Neo4jGraph(val schema: Schema, val session: CAPSSession)(
   override def union(other: PropertyGraph): CAPSGraph =
     throw UnsupportedOperationException(s"Union with $this")
 
-  private def computeRecords(name: String, cypherType: CypherType, header: RecordHeader)(
-    computeRdd: (RecordHeader, StructType) => RDD[Row]): CAPSRecords = {
+  private def computeRecords(name: String, cypherType: CypherType, header: TableHeader)(
+    computeRdd: (TableHeader, StructType) => RDD[Row]): CAPSRecords = {
     val struct = CAPSRecordHeader.asSparkStructType(header)
     val rdd = computeRdd(header, struct)
     val slot = header.slotFor(Var(name)(cypherType))
@@ -104,7 +104,7 @@ object Neo4jGraph {
       requiredLabels.forall(importedNode.hasLabel)
   }
 
-  private case class nodeToRow(header: RecordHeader, schema: StructType) extends (InternalNode => Row) {
+  private case class nodeToRow(header: TableHeader, schema: StructType) extends (InternalNode => Row) {
 
     override def apply(importedNode: InternalNode): Row = {
       import scala.collection.JavaConverters._
@@ -141,7 +141,7 @@ object Neo4jGraph {
       relType.types.isEmpty || relType.types.exists(importedRel.hasType)
   }
 
-  private case class relToRow(header: RecordHeader, schema: StructType) extends (InternalRelationship => Row) {
+  private case class relToRow(header: TableHeader, schema: StructType) extends (InternalRelationship => Row) {
     override def apply(importedRel: InternalRelationship): Row = {
       import scala.collection.JavaConverters._
 

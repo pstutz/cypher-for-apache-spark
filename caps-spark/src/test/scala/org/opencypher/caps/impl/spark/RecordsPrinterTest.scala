@@ -19,7 +19,7 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets.UTF_8
 
 import org.opencypher.caps.api.types.CTNode
-import org.opencypher.caps.impl.record.{CypherRecords, OpaqueField, RecordHeader}
+import org.opencypher.caps.impl.record.{CypherTable, OpaqueField, TableHeader}
 import org.opencypher.caps.impl.syntax.RecordHeaderSyntax._
 import org.opencypher.caps.impl.util.PrintOptions
 import org.opencypher.caps.ir.api.expr.Var
@@ -147,15 +147,15 @@ class RecordsPrinterTest extends CAPSTestSuite with GraphCreationFixture {
   private case class Row1(foo: String)
   private case class Row3(foo: String, v: Long, veryLongColumnNameWithBoolean: Boolean)
 
-  private def headerOf(fields: Symbol*): RecordHeader = {
+  private def headerOf(fields: Symbol*): TableHeader = {
     val value1 = fields.map(f => OpaqueField(Var(f.name)(CTNode)))
-    val (header, _) = RecordHeader.empty.update(addContents(value1))
+    val (header, _) = TableHeader.empty.update(addContents(value1))
     header
   }
 
   private def getString =
     new String(baos.toByteArray, UTF_8)
 
-  private def print(r: CypherRecords)(implicit options: PrintOptions): Unit =
+  private def print(r: CypherTable)(implicit options: PrintOptions): Unit =
     RecordsPrinter.print(r)(options.stream(new PrintStream(baos, true, UTF_8.name())))
 }

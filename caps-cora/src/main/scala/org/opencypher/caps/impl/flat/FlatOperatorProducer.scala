@@ -51,7 +51,7 @@ class FlatOperatorProducer(implicit context: FlatPlannerContext) {
 
     val finalContents = fieldContents ++ fields.flatMap(in.header.childSlots).map(_.content)
 
-    val (nextHeader, _) = RecordHeader.empty.update(addContents(finalContents))
+    val (nextHeader, _) = TableHeader.empty.update(addContents(finalContents))
 
     Select(fields, graphs, in, nextHeader)
   }
@@ -72,7 +72,7 @@ class FlatOperatorProducer(implicit context: FlatPlannerContext) {
           other
       }
 
-      val (header, _) = RecordHeader.empty.update(addContents(newHeaderContents.toSeq))
+      val (header, _) = TableHeader.empty.update(addContents(newHeaderContents.toSeq))
 
       RemoveAliases(renames, in, header)
     }
@@ -104,13 +104,13 @@ class FlatOperatorProducer(implicit context: FlatPlannerContext) {
     * That means that it will discard any incoming fields from the ancestor header (assumes it is empty)
     */
   def nodeScan(node: Var, prev: FlatOperator): NodeScan = {
-    val header = RecordHeader.nodeFromSchema(node, prev.sourceGraph.schema)
+    val header = TableHeader.nodeFromSchema(node, prev.sourceGraph.schema)
 
     new NodeScan(node, prev, header)
   }
 
   def edgeScan(edge: Var, prev: FlatOperator): EdgeScan = {
-    val edgeHeader = RecordHeader.relationshipFromSchema(edge, prev.sourceGraph.schema)
+    val edgeHeader = TableHeader.relationshipFromSchema(edge, prev.sourceGraph.schema)
 
     EdgeScan(edge, prev, edgeHeader)
   }
@@ -131,7 +131,7 @@ class FlatOperatorProducer(implicit context: FlatPlannerContext) {
   }
 
   def aggregate(aggregations: Set[(Var, Aggregator)], group: Set[Var], in: FlatOperator): Aggregate = {
-    val (newHeader, _) = RecordHeader.empty.update(
+    val (newHeader, _) = TableHeader.empty.update(
       addContents(
         group.flatMap(in.header.selfWithChildren).map(_.content).toSeq ++ aggregations.map(agg => OpaqueField(agg._1)))
     )
@@ -164,7 +164,7 @@ class FlatOperatorProducer(implicit context: FlatPlannerContext) {
       schema: Schema,
       sourceOp: FlatOperator,
       targetOp: FlatOperator): FlatOperator = {
-    val relHeader = RecordHeader.relationshipFromSchema(rel, schema)
+    val relHeader = TableHeader.relationshipFromSchema(rel, schema)
 
     val expandHeader = sourceOp.header ++ relHeader ++ targetOp.header
 
@@ -172,7 +172,7 @@ class FlatOperatorProducer(implicit context: FlatPlannerContext) {
   }
 
   def expandInto(source: Var, rel: Var, target: Var, direction: Direction, schema: Schema, sourceOp: FlatOperator): FlatOperator = {
-    val relHeader = RecordHeader.relationshipFromSchema(rel, schema)
+    val relHeader = TableHeader.relationshipFromSchema(rel, schema)
 
     val expandHeader = sourceOp.header ++ relHeader
 
@@ -191,7 +191,7 @@ class FlatOperatorProducer(implicit context: FlatPlannerContext) {
   }
 
   def planEmptyRecords(fields: Set[Var], prev: FlatOperator): EmptyRecords = {
-    val header = RecordHeader.from(fields.map(OpaqueField).toSeq: _*)
+    val header = TableHeader.from(fields.map(OpaqueField).toSeq: _*)
     EmptyRecords(prev, header)
   }
 

@@ -20,11 +20,11 @@ import org.apache.spark.sql.types.StructType
 import org.opencypher.caps.api.exception.IllegalArgumentException
 import org.opencypher.caps.api.types.{CTNode, CTRelationship}
 import org.opencypher.caps.impl.record.CAPSRecordHeader._
-import org.opencypher.caps.impl.record.{ProjectedExpr, RecordHeader, RecordSlot}
+import org.opencypher.caps.impl.record.{ProjectedExpr, TableHeader, RecordSlot}
 import org.opencypher.caps.ir.api.expr._
 
 case class RowExpansion(
-    targetHeader: RecordHeader,
+    targetHeader: TableHeader,
     targetVar: Var,
     entitiesWithChildren: Map[Var, Seq[RecordSlot]],
     propertyColumnLookupTables: Map[Var, Map[String, String]]

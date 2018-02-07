@@ -21,7 +21,7 @@ import org.apache.spark.sql.{Column, DataFrame, functions}
 import org.opencypher.caps.api.CAPSSession
 import org.opencypher.caps.api.exception.IllegalArgumentException
 import org.opencypher.caps.api.types._
-import org.opencypher.caps.impl.record.{RecordHeader, RecordSlot, SlotContent}
+import org.opencypher.caps.impl.record.{TableHeader, RecordSlot, SlotContent}
 import org.opencypher.caps.impl.spark.CAPSConverters._
 import org.opencypher.caps.impl.spark.physical.{PhysicalResult, RuntimeContext}
 import org.opencypher.caps.impl.spark.{CAPSGraph, CAPSRecords, SparkColumnName}
@@ -29,7 +29,7 @@ import org.opencypher.caps.trees.AbstractTreeNode
 
 private[caps] abstract class PhysicalOperator extends AbstractTreeNode[PhysicalOperator] {
 
-  def header: RecordHeader
+  def header: TableHeader
 
   def execute(implicit context: RuntimeContext): PhysicalResult
 
@@ -38,7 +38,7 @@ private[caps] abstract class PhysicalOperator extends AbstractTreeNode[PhysicalO
   }
 
   override def args: Iterator[Any] = super.args.flatMap {
-    case RecordHeader(_) | Some(RecordHeader(_)) => None
+    case TableHeader(_) | Some(TableHeader(_)) => None
     case other                                   => Some(other)
   }
 }
@@ -49,7 +49,7 @@ object PhysicalOperator {
   def columnName(content: SlotContent): String = SparkColumnName.of(content)
 
   def joinRecords(
-      header: RecordHeader,
+      header: TableHeader,
       joinSlots: Seq[(RecordSlot, RecordSlot)],
       joinType: String = "inner",
       deduplicate: Boolean = false)(lhs: CAPSRecords, rhs: CAPSRecords): CAPSRecords = {
@@ -62,7 +62,7 @@ object PhysicalOperator {
     joinDFs(lhsData, rhsData, header, joinCols)(joinType, deduplicate)(lhs.caps)
   }
 
-  def joinDFs(lhsData: DataFrame, rhsData: DataFrame, header: RecordHeader, joinCols: Seq[(Column, Column)])(
+  def joinDFs(lhsData: DataFrame, rhsData: DataFrame, header: TableHeader, joinCols: Seq[(Column, Column)])(
       joinType: String,
       deduplicate: Boolean)(implicit caps: CAPSSession): CAPSRecords = {
 

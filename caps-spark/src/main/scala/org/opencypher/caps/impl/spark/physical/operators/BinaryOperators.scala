@@ -16,7 +16,7 @@
 package org.opencypher.caps.impl.spark.physical.operators
 
 import org.apache.spark.sql.functions
-import org.opencypher.caps.impl.record.{OpaqueField, RecordHeader, RecordSlot}
+import org.opencypher.caps.impl.record.{OpaqueField, TableHeader, RecordSlot}
 import org.opencypher.caps.impl.spark.physical.operators.PhysicalOperator.{assertIsNode, columnName, joinDFs, joinRecords}
 import org.opencypher.caps.impl.spark.physical.{PhysicalResult, RuntimeContext}
 import org.opencypher.caps.impl.spark.{CAPSRecords, ColumnNameGenerator}
@@ -37,7 +37,7 @@ final case class ValueJoin(
     lhs: PhysicalOperator,
     rhs: PhysicalOperator,
     predicates: Set[org.opencypher.caps.ir.api.expr.Equals],
-    header: RecordHeader)
+    header: TableHeader)
     extends BinaryPhysicalOperator {
 
   override def executeBinary(left: PhysicalResult, right: PhysicalResult)(
@@ -61,7 +61,7 @@ final case class ValueJoin(
   * @param rhs optional match data
   * @param header result header (lhs header + rhs header)
   */
-final case class Optional(lhs: PhysicalOperator, rhs: PhysicalOperator, header: RecordHeader)
+final case class Optional(lhs: PhysicalOperator, rhs: PhysicalOperator, header: TableHeader)
     extends BinaryPhysicalOperator {
 
   override def executeBinary(left: PhysicalResult, right: PhysicalResult)(
@@ -136,7 +136,7 @@ final case class ExistsSubQuery(
     lhs: PhysicalOperator,
     rhs: PhysicalOperator,
     targetField: Var,
-    header: RecordHeader)
+    header: TableHeader)
     extends BinaryPhysicalOperator {
 
   override def executeBinary(left: PhysicalResult, right: PhysicalResult)(
@@ -206,7 +206,7 @@ final case class ExpandInto(
     source: Var,
     rel: Var,
     target: Var,
-    header: RecordHeader)
+    header: TableHeader)
     extends BinaryPhysicalOperator {
 
   override def executeBinary(left: PhysicalResult, right: PhysicalResult)(
@@ -252,7 +252,7 @@ final case class Union(lhs: PhysicalOperator, rhs: PhysicalOperator)
   }
 }
 
-final case class CartesianProduct(lhs: PhysicalOperator, rhs: PhysicalOperator, header: RecordHeader)
+final case class CartesianProduct(lhs: PhysicalOperator, rhs: PhysicalOperator, header: TableHeader)
     extends BinaryPhysicalOperator {
 
   override def executeBinary(left: PhysicalResult, right: PhysicalResult)(

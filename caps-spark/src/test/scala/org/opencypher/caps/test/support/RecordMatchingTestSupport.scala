@@ -56,13 +56,13 @@ trait RecordMatchingTestSupport {
         case slot: FieldSlotContent => OpaqueField(slot.field)
         case slot: ProjectedExpr    => OpaqueField(Var(slot.expr.withoutType)(slot.cypherType))
       }
-      val newHeader = RecordHeader.from(newSlots: _*)
+      val newHeader = TableHeader.from(newSlots: _*)
       val newData = records.data.toDF(newHeader.internalHeader.columns: _*)
       CAPSRecords.verifyAndCreate(newHeader, newData)(records.caps)
     }
   }
 
-  implicit class RichRecords(records: CypherRecords) {
+  implicit class RichRecords(records: CypherTable) {
     val capsRecords = records.asCaps
     import org.opencypher.caps.impl.spark.DfUtils._
 

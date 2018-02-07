@@ -16,7 +16,7 @@
 package org.opencypher.caps.web
 
 import org.opencypher.caps.api.types.CTNode
-import org.opencypher.caps.impl.record.{OpaqueField, RecordHeader}
+import org.opencypher.caps.impl.record.{OpaqueField, TableHeader}
 import org.opencypher.caps.impl.spark.{CAPSGraph, CAPSRecords}
 import org.opencypher.caps.impl.syntax.RecordHeaderSyntax._
 import org.opencypher.caps.ir.api.expr.Var
@@ -432,9 +432,9 @@ class CAPSJsonSerialiserTest extends CAPSTestSuite with TeamDataFixture {
 
   private case class MapRow(strings: Map[String, String], integers: Map[String, Long], booleans: Map[String, Boolean])
 
-  private def headerOf(fields: Symbol*): RecordHeader = {
+  private def headerOf(fields: Symbol*): TableHeader = {
     val value1 = fields.map(f => OpaqueField(Var(f.name)(CTNode)))
-    val (header, _) = RecordHeader.empty.update(addContents(value1))
+    val (header, _) = TableHeader.empty.update(addContents(value1))
     header
   }
 }

@@ -19,11 +19,11 @@ import org.apache.spark.sql.Row
 import org.opencypher.caps.api.types.{CTNode, CTRelationship}
 import org.opencypher.caps.api.value.CypherValue._
 import org.opencypher.caps.api.value._
-import org.opencypher.caps.impl.record.RecordHeader
+import org.opencypher.caps.impl.record.TableHeader
 import org.opencypher.caps.impl.spark.SparkColumnName
 import org.opencypher.caps.ir.api.expr.Var
 
-final case class rowToCypherMap(header: RecordHeader) extends (Row => CypherMap) {
+final case class rowToCypherMap(header: TableHeader) extends (Row => CypherMap) {
   override def apply(row: Row): CypherMap = {
     val values = header.internalHeader.fields.map { field =>
       field.name -> constructValue(row, field)

@@ -25,31 +25,31 @@ object RecordHeaderSyntax extends RecordHeaderSyntax
 
 trait RecordHeaderSyntax {
 
-  implicit def sparkRecordHeaderSyntax(header: RecordHeader): RecordHeaderOps =
+  implicit def sparkRecordHeaderSyntax(header: TableHeader): RecordHeaderOps =
     new RecordHeaderOps(header)
 
-  type HeaderState[X] = State[RecordHeader, X]
+  type HeaderState[X] = State[TableHeader, X]
 
-  def addContents(contents: Seq[SlotContent]): State[RecordHeader, Vector[AdditiveUpdateResult[RecordSlot]]] =
+  def addContents(contents: Seq[SlotContent]): State[TableHeader, Vector[AdditiveUpdateResult[RecordSlot]]] =
     exec(InternalHeader.addContents(contents))
 
-  def addContent(content: SlotContent): State[RecordHeader, AdditiveUpdateResult[RecordSlot]] =
+  def addContent(content: SlotContent): State[TableHeader, AdditiveUpdateResult[RecordSlot]] =
     exec(InternalHeader.addContent(content))
 
-  def compactFields(implicit details: RetainedDetails): State[RecordHeader, Vector[RemovingUpdateResult[RecordSlot]]] =
+  def compactFields(implicit details: RetainedDetails): State[TableHeader, Vector[RemovingUpdateResult[RecordSlot]]] =
     exec(InternalHeader.compactFields)
 
-  private def exec[O](inner: State[InternalHeader, O]): State[RecordHeader, O] =
-    get[RecordHeader]
+  private def exec[O](inner: State[InternalHeader, O]): State[TableHeader, O] =
+    get[TableHeader]
       .map(header => inner.run(header.internalHeader).value)
-      .flatMap { case (newInternalHeader, value) => set(RecordHeader(newInternalHeader)).map(_ => value) }
+      .flatMap { case (newInternalHeader, value) => set(TableHeader(newInternalHeader)).map(_ => value) }
 }
 
-final class RecordHeaderOps(header: RecordHeader) {
+final class RecordHeaderOps(header: TableHeader) {
 
-  def +(content: SlotContent): RecordHeader =
+  def +(content: SlotContent): TableHeader =
     header.copy(header.internalHeader + content)
 
-  def update[A](ops: State[RecordHeader, A]): (RecordHeader, A) =
+  def update[A](ops: State[TableHeader, A]): (TableHeader, A) =
     ops.run(header).value
 }

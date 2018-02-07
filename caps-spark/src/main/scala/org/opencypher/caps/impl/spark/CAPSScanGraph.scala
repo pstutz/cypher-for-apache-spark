@@ -22,7 +22,7 @@ import org.opencypher.caps.api.exception.IllegalArgumentException
 import org.opencypher.caps.api.graph.PropertyGraph
 import org.opencypher.caps.api.schema.{EntityTable, NodeTable, RelationshipTable, Schema}
 import org.opencypher.caps.api.types.{CTNode, CTRelationship, CypherType, DefiniteCypherType}
-import org.opencypher.caps.impl.record.RecordHeader
+import org.opencypher.caps.impl.record.TableHeader
 import org.opencypher.caps.impl.spark.CAPSConverters._
 import org.opencypher.caps.ir.api.expr._
 
@@ -55,7 +55,7 @@ class CAPSScanGraph(val scans: Seq[EntityTable], val schema: Schema)(implicit va
     val node = Var(name)(nodeCypherType)
     val selectedTables = nodeEntityTables.byType(nodeCypherType)
     val schema = selectedTables.map(_.schema).foldLeft(Schema.empty)(_ ++ _)
-    val targetNodeHeader = RecordHeader.nodeFromSchema(node, schema)
+    val targetNodeHeader = TableHeader.nodeFromSchema(node, schema)
 
     val scanRecords: Seq[CAPSRecords] = selectedTables.map(_.records)
     val alignedRecords = scanRecords.map(_.alignWith(node, targetNodeHeader))
@@ -66,7 +66,7 @@ class CAPSScanGraph(val scans: Seq[EntityTable], val schema: Schema)(implicit va
     val rel = Var(name)(relCypherType)
     val selectedScans = relEntityTables.byType(relCypherType)
     val schema = selectedScans.map(_.schema).foldLeft(Schema.empty)(_ ++ _)
-    val targetRelHeader = RecordHeader.relationshipFromSchema(rel, schema)
+    val targetRelHeader = TableHeader.relationshipFromSchema(rel, schema)
 
     val scanRecords = selectedScans.map(_.records)
     val alignedRecords = scanRecords.map(_.alignWith(rel, targetRelHeader))

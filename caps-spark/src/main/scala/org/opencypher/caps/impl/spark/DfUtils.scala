@@ -20,14 +20,14 @@ import org.opencypher.caps.api.exception.{IllegalArgumentException, NotImplement
 import org.opencypher.caps.api.types._
 import org.opencypher.caps.api.value.CypherValue._
 import org.opencypher.caps.api.value._
-import org.opencypher.caps.impl.record.RecordHeader
+import org.opencypher.caps.impl.record.TableHeader
 import org.opencypher.caps.impl.spark.physical.RuntimeContext
 import org.opencypher.caps.ir.api.expr.{Expr, Param}
 
 object DfUtils {
 
   implicit class CypherRow(r: Row) {
-    def getCypherValue(expr: Expr, header: RecordHeader)(implicit context: RuntimeContext): CypherValue = {
+    def getCypherValue(expr: Expr, header: TableHeader)(implicit context: RuntimeContext): CypherValue = {
       expr match {
         case Param(name) => context.parameters(name)
         case _ =>

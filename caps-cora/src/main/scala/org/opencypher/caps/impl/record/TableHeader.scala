@@ -28,7 +28,7 @@ import org.opencypher.caps.ir.api.{Label, PropertyKey}
   * The header consists of a number of slots, each of which represents a Cypher expression.
   * The slots that represent variables (which is a kind of expression) are called <i>fields</i>.
   */
-final case class RecordHeader(internalHeader: InternalHeader) extends CypherRecordHeader {
+final case class TableHeader(internalHeader: InternalHeader) extends CypherTableHeader {
 
   /**
     * Computes the concatenation of this header and another header.
@@ -36,7 +36,7 @@ final case class RecordHeader(internalHeader: InternalHeader) extends CypherReco
     * @param other the header with which to concatenate.
     * @return the concatenation of this and the argument header.
     */
-  def ++(other: RecordHeader): RecordHeader =
+  def ++(other: TableHeader): TableHeader =
     copy(internalHeader ++ other.internalHeader)
 
   def indexOf(content: SlotContent): Option[Int] = slots.find(_.content == content).map(_.index)
@@ -82,8 +82,8 @@ final case class RecordHeader(internalHeader: InternalHeader) extends CypherReco
 
   def properties(node: Var): Seq[Property] = propertySlots(node).keys.toSeq
 
-  def select(fields: Set[Var]): RecordHeader = {
-    fields.foldLeft(RecordHeader.empty) {
+  def select(fields: Set[Var]): TableHeader = {
+    fields.foldLeft(TableHeader.empty) {
       case (acc, next) =>
         val contents = childSlots(next).map(_.content)
         if (contents.nonEmpty) {
@@ -152,16 +152,16 @@ final case class RecordHeader(internalHeader: InternalHeader) extends CypherReco
   def pretty: String = s"RecordHeader with ${slots.size} slots: \n\t ${slots.mkString("\n\t")}"
 }
 
-object RecordHeader {
+object TableHeader {
 
-  def empty: RecordHeader =
-    RecordHeader(InternalHeader.empty)
+  def empty: TableHeader =
+    TableHeader(InternalHeader.empty)
 
-  def from(contents: SlotContent*): RecordHeader =
-    RecordHeader(contents.foldLeft(InternalHeader.empty) { case (header, slot) => header + slot })
+  def from(contents: SlotContent*): TableHeader =
+    TableHeader(contents.foldLeft(InternalHeader.empty) { case (header, slot) => header + slot })
 
   // TODO: Probably move this to an implicit class RichSchema?
-  def nodeFromSchema(node: Var, schema: Schema): RecordHeader = {
+  def nodeFromSchema(node: Var, schema: Schema): TableHeader = {
     val labels: Set[String] = node.cypherType match {
       case CTNode(l) => l
       case other     => throw IllegalArgumentException("CTNode", other)
@@ -169,7 +169,7 @@ object RecordHeader {
     nodeFromSchema(node, schema, labels)
   }
 
-  def nodeFromSchema(node: Var, schema: Schema, labels: Set[String]): RecordHeader = {
+  def nodeFromSchema(node: Var, schema: Schema, labels: Set[String]): TableHeader = {
 
     val labelCombos = if (labels.isEmpty) {
       // all nodes scan
@@ -192,13 +192,13 @@ object RecordHeader {
     }
 
     val projectedExprs = labelExprs ++ propertyExprs
-    val (header, _) = RecordHeader.empty
+    val (header, _) = TableHeader.empty
       .update(addContents(OpaqueField(node) +: projectedExprs))
 
     header
   }
 
-  def relationshipFromSchema(rel: Var, schema: Schema): RecordHeader = {
+  def relationshipFromSchema(rel: Var, schema: Schema): TableHeader = {
     val types: Set[String] = rel.cypherType match {
       case CTRelationship(_types) if _types.isEmpty =>
         schema.relationshipTypes
@@ -211,7 +211,7 @@ object RecordHeader {
     relationshipFromSchema(rel, schema, types)
   }
 
-  def relationshipFromSchema(rel: Var, schema: Schema, relTypes: Set[String]): RecordHeader = {
+  def relationshipFromSchema(rel: Var, schema: Schema, relTypes: Set[String]): TableHeader = {
     val relKeyHeaderProperties = relTypes.toSeq
       .flatMap(t => schema.relationshipKeys(t).toSeq)
       .groupBy(_._1)
@@ -232,7 +232,7 @@ object RecordHeader {
     val endNode = ProjectedExpr(EndNode(rel)(CTNode))
 
     val relHeaderContents = Seq(startNode, OpaqueField(rel), typeString, endNode) ++ relKeyHeaderContents
-    val (relHeader, _) = RecordHeader.empty.update(addContents(relHeaderContents))
+    val (relHeader, _) = TableHeader.empty.update(addContents(relHeaderContents))
 
     relHeader
   }

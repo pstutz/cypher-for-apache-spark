@@ -25,14 +25,14 @@ import org.opencypher.caps.ir.api.expr.Var
 
 object CAPSRecordHeader {
 
-  def fromSparkStructType(structType: StructType): RecordHeader =
-    RecordHeader.from(structType.fields.map { field =>
+  def fromSparkStructType(structType: StructType): TableHeader =
+    TableHeader.from(structType.fields.map { field =>
       OpaqueField(
         Var(field.name)(fromSparkType(field.dataType, field.nullable)
           .getOrElse(throw IllegalArgumentException("a supported Spark type", field.dataType))))
     }: _*)
 
-  def asSparkStructType(header: RecordHeader): StructType = {
+  def asSparkStructType(header: TableHeader): StructType = {
     val fields = header.slots.map(slot => structField(slot, !header.mandatory(slot)))
     StructType(fields)
   }
@@ -43,7 +43,7 @@ object CAPSRecordHeader {
     StructField(name, dataType, nullable)
   }
 
-  implicit class CAPSRecordHeader(header: RecordHeader) extends Serializable {
+  implicit class CAPSRecordHeader(header: TableHeader) extends Serializable {
     def asSparkSchema: StructType =
       StructType(header.internalHeader.slots.map(_.asStructField))
 

@@ -19,7 +19,7 @@ import java.util.Collections
 
 import org.apache.spark.sql.types.{IntegerType, StructField, StructType}
 import org.apache.spark.sql.{Column, DataFrame, Row}
-import org.opencypher.caps.impl.record.{OpaqueField, ProjectedField, RecordHeader}
+import org.opencypher.caps.impl.record.{OpaqueField, ProjectedField, TableHeader}
 import org.opencypher.caps.impl.spark.SparkSQLExprMapper._
 import org.opencypher.caps.impl.spark.physical.RuntimeContext
 import org.opencypher.caps.impl.syntax.RecordHeaderSyntax._
@@ -40,14 +40,14 @@ class SparkSQLExprMapperTest extends BaseTestSuite with SparkSessionFixture {
     )
   }
 
-  private def convert(expr: Expr, header: RecordHeader = _header): Column = {
+  private def convert(expr: Expr, header: TableHeader = _header): Column = {
     expr.asSparkSQLExpr(header, df, RuntimeContext.empty)
   }
 
-  val _header: RecordHeader = RecordHeader.empty.update(addContents(Seq(OpaqueField('a), OpaqueField('b))))
+  val _header: TableHeader = TableHeader.empty.update(addContents(Seq(OpaqueField('a), OpaqueField('b))))
   val df: DataFrame = session.createDataFrame(
     Collections.emptyList[Row](),
     StructType(Seq(StructField("a", IntegerType), StructField("b", IntegerType))))
 
-  implicit def extractRecordHeaderFromResult[T](tuple: (RecordHeader, T)): RecordHeader = tuple._1
+  implicit def extractRecordHeaderFromResult[T](tuple: (TableHeader, T)): TableHeader = tuple._1
 }

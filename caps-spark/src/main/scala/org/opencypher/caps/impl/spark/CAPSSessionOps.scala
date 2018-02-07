@@ -17,33 +17,33 @@ package org.opencypher.caps.impl.spark
 
 import org.opencypher.caps.api.graph.PropertyGraph
 import org.opencypher.caps.api.value.CypherValue._
-import org.opencypher.caps.impl.record.CypherRecords
+import org.opencypher.caps.impl.record.CypherTable
 import org.opencypher.caps.ir.api.expr.{Expr, Var}
 
 trait CAPSSessionOps {
 
   def filter(
       graph: PropertyGraph,
-      in: CypherRecords,
+      in: CypherTable,
       expr: Expr,
-      queryParameters: CypherMap): CypherRecords
+      queryParameters: CypherMap): CypherTable
 
   def select(
       graph: PropertyGraph,
-      in: CypherRecords,
+      in: CypherTable,
       fields: IndexedSeq[Var],
-      queryParameters: CypherMap): CypherRecords
+      queryParameters: CypherMap): CypherTable
 
   def project(
       graph: PropertyGraph,
-      in: CypherRecords,
+      in: CypherTable,
       expr: Expr,
-      queryParameters: CypherMap): CypherRecords
+      queryParameters: CypherMap): CypherTable
 
   def alias(
       graph: PropertyGraph,
-      in: CypherRecords,
+      in: CypherTable,
       alias: (Expr, Var),
-      queryParameters: CypherMap): CypherRecords
+      queryParameters: CypherMap): CypherTable
 
 }

@@ -15,7 +15,7 @@
  */
 package org.opencypher.caps.api.graph
 
-import org.opencypher.caps.impl.record.{CypherPrintable, CypherRecords}
+import org.opencypher.caps.impl.record.{CypherPrintable, CypherTable}
 import org.opencypher.caps.impl.util.PrintOptions
 import org.opencypher.caps.trees.TreeNode
 
@@ -46,7 +46,7 @@ trait CypherResult extends CypherPrintable {
     *
     * @return a table of records.
     */
-  def records: CypherRecords
+  def records: CypherTable
 
   type LogicalPlan <: TreeNode[LogicalPlan]
   type FlatPlan <: TreeNode[FlatPlan]

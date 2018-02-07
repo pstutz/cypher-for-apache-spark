@@ -28,7 +28,7 @@ import org.opencypher.caps.api.value.CypherValue._
 import org.opencypher.caps.api.value._
 import org.opencypher.caps.demo.Configuration.{PrintLogicalPlan, PrintPhysicalPlan, PrintQueryExecutionStages}
 import org.opencypher.caps.impl.flat.{FlatPlanner, FlatPlannerContext}
-import org.opencypher.caps.impl.record.CypherRecords
+import org.opencypher.caps.impl.record.CypherTable
 import org.opencypher.caps.impl.spark.CAPSConverters._
 import org.opencypher.caps.impl.spark.io.{CAPSGraphSourceHandler, CAPSPropertyGraphDataSource}
 import org.opencypher.caps.impl.spark.physical._
@@ -163,7 +163,7 @@ sealed class CAPSSessionImpl(val sparkSession: SparkSession, private val graphSo
 
   override def filter(
     graph: PropertyGraph,
-    in: CypherRecords,
+    in: CypherTable,
     expr: Expr,
     queryParameters: CypherMap): CAPSRecords = {
     val scan = planStart(graph, in.header.asCaps.internalHeader.fields)
@@ -173,7 +173,7 @@ sealed class CAPSSessionImpl(val sparkSession: SparkSession, private val graphSo
 
   override def select(
     graph: PropertyGraph,
-    in: CypherRecords,
+    in: CypherTable,
     fields: IndexedSeq[Var],
     queryParameters: CypherMap): CAPSRecords = {
     val scan = planStart(graph, in.header.asCaps.internalHeader.fields)
@@ -183,7 +183,7 @@ sealed class CAPSSessionImpl(val sparkSession: SparkSession, private val graphSo
 
   override def project(
     graph: PropertyGraph,
-    in: CypherRecords,
+    in: CypherTable,
     expr: Expr,
     queryParameters: CypherMap): CAPSRecords = {
     val scan = planStart(graph, in.header.asCaps.internalHeader.fields)
@@ -193,7 +193,7 @@ sealed class CAPSSessionImpl(val sparkSession: SparkSession, private val graphSo
 
   override def alias(
     graph: PropertyGraph,
-    in: CypherRecords,
+    in: CypherTable,
     alias: (Expr, Var),
     queryParameters: CypherMap): CAPSRecords = {
     val (expr, v) = alias
@@ -204,7 +204,7 @@ sealed class CAPSSessionImpl(val sparkSession: SparkSession, private val graphSo
 
   private def plan(
     graph: PropertyGraph,
-    records: CypherRecords,
+    records: CypherTable,
     parameters: CypherMap,
     logicalPlan: LogicalOperator): CAPSResult = {
     logStageProgress("Flat plan ... ", false)

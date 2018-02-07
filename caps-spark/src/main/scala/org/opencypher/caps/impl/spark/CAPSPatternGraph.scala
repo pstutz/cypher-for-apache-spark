@@ -21,7 +21,7 @@ import org.opencypher.caps.api.graph.PropertyGraph
 import org.opencypher.caps.api.schema.Schema
 import org.opencypher.caps.api.types.{CTNode, CTRelationship}
 import org.opencypher.caps.impl.record.CAPSRecordHeader._
-import org.opencypher.caps.impl.record.{RecordHeader, SlotContent}
+import org.opencypher.caps.impl.record.{TableHeader, SlotContent}
 import org.opencypher.caps.impl.spark.CAPSConverters._
 import org.opencypher.caps.ir.api.expr._
 
@@ -48,7 +48,7 @@ class CAPSPatternGraph(private[spark] val baseTable: CAPSRecords, val schema: Sc
   override def nodes(name: String, nodeCypherType: CTNode): CAPSRecords = {
     val targetNode = Var(name)(nodeCypherType)
     val nodeSchema = schema.forNode(nodeCypherType)
-    val targetNodeHeader = RecordHeader.nodeFromSchema(targetNode, nodeSchema)
+    val targetNodeHeader = TableHeader.nodeFromSchema(targetNode, nodeSchema)
     val extractionNodes: Seq[Var] = header.nodesForType(nodeCypherType)
 
     extractRecordsFor(targetNode, targetNodeHeader, extractionNodes)
@@ -56,13 +56,13 @@ class CAPSPatternGraph(private[spark] val baseTable: CAPSRecords, val schema: Sc
 
   override def relationships(name: String, relCypherType: CTRelationship): CAPSRecords = {
     val targetRel = Var(name)(relCypherType)
-    val targetRelHeader = RecordHeader.relationshipFromSchema(targetRel, schema.forRelationship(relCypherType))
+    val targetRelHeader = TableHeader.relationshipFromSchema(targetRel, schema.forRelationship(relCypherType))
     val extractionRels = header.relationshipsForType(relCypherType)
 
     extractRecordsFor(targetRel, targetRelHeader, extractionRels)
   }
 
-  private def extractRecordsFor(targetVar: Var, targetHeader: RecordHeader, extractionVars: Seq[Var]): CAPSRecords = {
+  private def extractRecordsFor(targetVar: Var, targetHeader: TableHeader, extractionVars: Seq[Var]): CAPSRecords = {
     val extractionSlots = extractionVars.map { candidate =>
       candidate -> (header.childSlots(candidate) :+ header.slotFor(candidate))
     }.toMap

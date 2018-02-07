@@ -20,7 +20,7 @@ import org.apache.spark.sql.{DataFrame, functions}
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.types.{ArrayType, BooleanType, LongType}
 import org.opencypher.caps.api.types.CTNode
-import org.opencypher.caps.impl.record.{OpaqueField, ProjectedExpr, RecordHeader, RecordSlot}
+import org.opencypher.caps.impl.record.{OpaqueField, ProjectedExpr, TableHeader, RecordSlot}
 import org.opencypher.caps.impl.spark.physical.operators.PhysicalOperator.{assertIsNode, columnName, joinRecords}
 import org.opencypher.caps.impl.spark.physical.{PhysicalResult, RuntimeContext}
 import org.opencypher.caps.impl.spark.{CAPSRecords, ColumnNameGenerator}
@@ -50,7 +50,7 @@ final case class ExpandSource(
     source: Var,
     rel: Var,
     target: Var,
-    header: RecordHeader,
+    header: TableHeader,
     removeSelfRelationships: Boolean = false)
     extends TernaryPhysicalOperator {
 
@@ -99,7 +99,7 @@ final case class BoundedVarExpand(
     lower: Int,
     upper: Int,
     direction: Direction,
-    header: RecordHeader,
+    header: TableHeader,
     isExpandInto: Boolean)
     extends TernaryPhysicalOperator {
 

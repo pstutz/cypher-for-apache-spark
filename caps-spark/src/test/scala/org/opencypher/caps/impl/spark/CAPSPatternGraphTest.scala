@@ -316,7 +316,7 @@ class CAPSPatternGraphTest extends CAPSTestSuite with GraphCreationFixture {
       ProjectedExpr(HasLabel(n, Label("Person"))(CTBoolean)),
       OpaqueField('q -> CTNode("Foo"))
     )
-    val (header, _) = RecordHeader.empty.update(addContents(fields))
+    val (header, _) = TableHeader.empty.update(addContents(fields))
 
     val df = session.createDataFrame(
       List(
@@ -356,7 +356,7 @@ class CAPSPatternGraphTest extends CAPSTestSuite with GraphCreationFixture {
       OpaqueField(x),
       ProjectedExpr(Type(x)(CTString))
     )
-    val (header, _) = RecordHeader.empty.update(addContents(fields))
+    val (header, _) = TableHeader.empty.update(addContents(fields))
 
     val df = session.createDataFrame(
       List(
@@ -397,7 +397,7 @@ class CAPSPatternGraphTest extends CAPSTestSuite with GraphCreationFixture {
       ProjectedExpr(HasLabel(p, Label("Person"))(CTBoolean)),
       ProjectedExpr(Property(p, PropertyKey("name"))(CTString))
     )
-    val (header, _) = RecordHeader.empty.update(addContents(fields))
+    val (header, _) = TableHeader.empty.update(addContents(fields))
 
     val sparkHeader = CAPSRecordHeader.asSparkStructType(header)
     val df = session.createDataFrame(
@@ -429,7 +429,7 @@ class CAPSPatternGraphTest extends CAPSTestSuite with GraphCreationFixture {
       ProjectedExpr(Property(p, PropertyKey("name"))(CTString)),
       ProjectedField('foo -> CTString, Property(e, PropertyKey("name"))(CTString))
     )
-    val (header, _) = RecordHeader.empty.update(addContents(fields))
+    val (header, _) = TableHeader.empty.update(addContents(fields))
 
     val sparkHeader = CAPSRecordHeader.asSparkStructType(header)
     val df = session.createDataFrame(
@@ -468,7 +468,7 @@ class CAPSPatternGraphTest extends CAPSTestSuite with GraphCreationFixture {
       ProjectedExpr(Property(e, PropertyKey("name"))(CTString.nullable)),
       ProjectedExpr(Property(pe, PropertyKey("name"))(CTString))
     )
-    val (header, _) = RecordHeader.empty.update(addContents(fields))
+    val (header, _) = TableHeader.empty.update(addContents(fields))
 
     val sparkHeader = CAPSRecordHeader.asSparkStructType(header)
     val df = session.createDataFrame(
@@ -551,7 +551,7 @@ class CAPSPatternGraphTest extends CAPSTestSuite with GraphCreationFixture {
       .join(booksDf, readsDf.col("____target(r)") === booksDf.col("b"))
 
     val slots = persons.header.slots ++ reads.header.slots ++ books.header.slots
-    val joinHeader = RecordHeader.from(slots.map(_.content): _*)
+    val joinHeader = TableHeader.from(slots.map(_.content): _*)
 
     CAPSGraph.create(CAPSRecords.verifyAndCreate(joinHeader, joinedDf), inputGraph.schema)
   }

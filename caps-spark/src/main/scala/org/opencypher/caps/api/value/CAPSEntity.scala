@@ -17,14 +17,34 @@ package org.opencypher.caps.api.value
 
 import org.opencypher.caps.api.value.CypherValue._
 
+trait CAPSEntity extends CypherEntity[Long] {
+  type I = CAPSEntity
+}
+
 case class CAPSNode(
   override val id: Long,
   override val labels: Set[String] = Set.empty,
-  override val properties: CypherMap = CypherMap.empty) extends CypherNode[Long]
+  override val properties: CypherMap = CypherMap.empty) extends CAPSEntity with CypherNode[Long] {
+
+  override type I = CAPSNode
+
+  override def copy(id: Long = id, labels: Set[String] = labels, properties: CypherMap = properties) = {
+    CAPSNode(id, labels, properties)
+  }
+
+}
 
 case class CAPSRelationship(
   override val id: Long,
   override val source: Long,
   override val target: Long,
   override val relType: String,
-  override val properties: CypherMap = CypherMap.empty) extends CypherRelationship[Long]
+  override val properties: CypherMap = CypherMap.empty) extends CAPSEntity with CypherRelationship[Long] {
+
+  override type I = CAPSRelationship
+
+  override def copy(id: Long = id, source: Long = source, target: Long = target, relType: String = relType, properties: CypherMap = properties) = {
+    CAPSRelationship(id, source, target, relType, properties).asInstanceOf[this.type]
+  }
+
+}

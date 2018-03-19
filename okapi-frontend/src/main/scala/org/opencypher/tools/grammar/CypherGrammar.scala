@@ -10,9 +10,7 @@ import org.opencypher.tools.grammar.Helpers._
 
 abstract class GrammarExpr extends AbstractTreeNode[GrammarExpr]
 
-case class Rule(name: String, parentClassOpt: Option[AbstractClassType], inline: Boolean, lexer: Boolean, definition: TermExpr) extends GrammarExpr
-
-//case class ParentConcept(name: String, parentClassOpt: Option[AbstractClassType])
+case class Rule(name: String, parentClassOpt: Option[AbstractClassType], inline: Boolean, lexer: Boolean, definition: GrammarExpr) extends GrammarExpr
 
 abstract class TermExpr extends GrammarExpr
 
@@ -32,11 +30,11 @@ case class IgnoreCaseLiteral(name: Option[String], s: String) extends Literal
 
 case class RepeatWithSeparator(expr: TermExpr, sep: TermExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String]) extends TermExpr
 
-case class Repeat(expr: TermExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String] = None) extends TermExpr
+case class Repeat(expr: GrammarExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String] = None) extends TermExpr
 
-case class Optional(expr: TermExpr, nameOpt: Option[String] = None) extends TermExpr
+case class Optional(expr: GrammarExpr, nameOpt: Option[String] = None) extends TermExpr
 
-case class Either(exprs: List[TermExpr], nameOpt: Option[String] = None) extends TermExpr
+case class Either(exprs: List[GrammarExpr], nameOpt: Option[String] = None) extends TermExpr
 
 case class Sequence(exprs: List[TermExpr], nameOpt: Option[String] = None) extends TermExpr
 

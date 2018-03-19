@@ -5,37 +5,44 @@ import org.opencypher.grammar.CharacterSet.ExclusionVisitor
 import org.opencypher.grammar.Grammar.Term
 import org.opencypher.grammar._
 
+import scala.language.higherKinds
 import scala.collection.JavaConverters._
-
+import scala.collection.generic.CanBuildFrom
+import scala.collection.immutable.List
+import scala.collection.mutable
 import scala.reflect.ClassTag
 
 object Helpers {
 
-    implicit class RichString(s: String) {
-      def isUpper: Boolean = s.toCharArray.forall(_.isUpper)
+  implicit class RichString(s: String) {
+    def isUpper: Boolean = s.toCharArray.forall(_.isUpper)
 
-      def isKeyword: Boolean = s.isUpper && s.toCharArray.forall(_.isLetter)
+    def isKeyword: Boolean = s.isUpper && s.toCharArray.forall(_.isLetter)
 
-      def firstCharToLowerCase: String = {
-        if (s.length == 0) {
-          s
-        } else {
-          val c = s.toCharArray
-          c(0) = Character.toLowerCase(c(0))
-          new String(c)
-        }
-      }
-
-      def asParamName: String = {
-        if (isUpper) {
-          s.toLowerCase
-        } else {
-          firstCharToLowerCase
-        }
+    def firstCharToLowerCase: String = {
+      if (s.length == 0) {
+        s
+      } else {
+        val c = s.toCharArray
+        c(0) = Character.toLowerCase(c(0))
+        new String(c)
       }
     }
 
-  implicit class RichList(val l: List[_]) extends AnyVal {
+    def asParamName: String = {
+      if (isUpper) {
+        s.toLowerCase
+      } else {
+        firstCharToLowerCase
+      }
+    }
+  }
+
+
+  implicit class RichList[I](val l: List[I]) extends AnyVal {
+    def hasA[C: ClassTag]: Boolean = {
+      l.collect { case c: C => c }.nonEmpty
+    }
 
     def have[C: ClassTag](f: C => Boolean): Boolean = {
       are[C] && as[C].forall(f)
@@ -48,12 +55,45 @@ object Helpers {
       }
     }
 
+    def mapOnly[C: ClassTag](f: C => I): List[I] = {
+      l.map {
+        case c: C => f(c)
+        case other => other
+      }
+    }
+
     def as[C]: List[C] = {
       l.asInstanceOf[List[C]]
     }
-
   }
 
+  implicit class RichArray[I: ClassTag](a: Array[I]) {
+    def hasA[C: ClassTag]: Boolean = {
+      a.collect { case c: C => c }.nonEmpty
+    }
+
+    def have[C: ClassTag](f: C => Boolean): Boolean = {
+      are[C] && as[C].forall(f)
+    }
+
+    def are[C: ClassTag]: Boolean = {
+      a.forall {
+        case _: C => true
+        case _ => false
+      }
+    }
+
+    def mapOnly[C: ClassTag](f: C => I): Array[I] = {
+      a.map {
+        case c: C => f(c)
+        case other => other
+      }.toArray
+    }
+
+    def as[C]: Array[C] = {
+      a.asInstanceOf[Array[C]]
+    }
+  }
 
   implicit class RichProduction(p: Production) {
     def convert: Rule = {

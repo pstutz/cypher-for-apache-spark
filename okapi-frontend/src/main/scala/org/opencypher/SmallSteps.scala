@@ -14,7 +14,9 @@ object SmallSteps extends App {
 
   val rules: Map[String, Rule] = CypherGrammar.parserRules()
 
-  //case class RelationshipTypes(relTypeName: RelTypeName, list: List[RelTypeName]) extends CypherExpression
+  //abstract class RightArrowHead extends RelationshipPattern
+//  oC_BooleanLiteral : TRUE
+//  | FALSE
 
   //println(usages)
   //  traverse(0, "Cypher")
@@ -131,7 +133,7 @@ object SmallSteps extends App {
     computeUsages(n, rewrittenRules)
   }
 
-  val rootExpressionType = AbstractClassType("CypherExpression", Some(AbstractClassType("AbstractTreeNode[CypherExpression]")))
+  val rootExpressionType = AbstractClassType("CypherAst", Some(AbstractClassType("AbstractTreeNode[CypherAst]")))
 
   def parentType(ruleName: String, rootType: AbstractClassType = rootExpressionType): Option[AbstractClassType] = {
     val rule = rewrittenRules(ruleName)
@@ -149,7 +151,13 @@ object SmallSteps extends App {
           val parentParams = parentRule.parameters(rewrittenRules)
           parentParams match {
             case List() => Some(AbstractClassType(parentRuleName))
-            case List(_) => Some(AbstractClassType(parentRuleName))
+            case List(_) =>
+              val pt = parentType(parentRuleName, rootType)
+              if (!pt.contains(rootExpressionType)) {
+                pt
+              } else {
+                Some(AbstractClassType(parentRuleName))
+              }
             case List(Parameter(_, a), Parameter(_, ListType(b))) =>
               if (a == b) {
                 parentType(parentRuleName)
@@ -158,14 +166,6 @@ object SmallSteps extends App {
               }
             case _ => Some(rootType)
           }
-          //        } else if (us.size == 2) {
-          //          val p1 = parentType(us.head)
-          //          val p2 = parentType(us.drop(1).head)
-          //          if (p1 == p2) {
-          //            p1
-          //          } else {
-          //            Some(rootType)
-          //          }
         } else {
           Some(rootType)
         }
@@ -185,8 +185,10 @@ object SmallSteps extends App {
 
   println(classDefs)
 
-//  val r = rulesWithParentTypes("AndExpression")
+//  val r = rulesWithParentTypes("UpdatingPart")
 //  println(r.pretty)
+//  println(parentType("UpdatingPart"))
+//  println(r.parameters(rulesWithParentTypes))
 
 
   var nextId = 0
@@ -273,10 +275,24 @@ object SmallSteps extends App {
         case Rule(name, _, _, _, _) => name.asParamName
         case RuleRef(ruleName) => ruleName.asParamName
         case l: Literal => l.getClass.getSimpleName.asParamName
-        case RepeatWithSeparator(expr, _, _, _, nameOpt) => nameOpt.map(_.asParamName).getOrElse("list")
-        case Repeat(expr, _, _, nameOpt) => nameOpt.map(_.asParamName).getOrElse("list")
-        case Optional(expr, nameOpt) => nameOpt.map(_.asParamName).getOrElse {
-          expr.parameterName + "Opt"
+        case RepeatWithSeparator(e, _, _, _, nameOpt) => nameOpt.map(_.asParamName).getOrElse {
+          val name = e.parameterName
+          if (name.endsWith("s")) {
+            name
+          } else {
+            name + "s"
+          }
+        }
+        case Repeat(e, _, _, nameOpt) => nameOpt.map(_.asParamName).getOrElse {
+          val name = e.parameterName
+          if (name.endsWith("s")) {
+            name
+          } else {
+            name + "s"
+          }
+        }
+        case Optional(e, nameOpt) => nameOpt.map(_.asParamName).getOrElse {
+          e.parameterName + "Opt"
         }
         case Either(_, nameOpt) => nameOpt.map(_.asParamName).getOrElse("anonymousEither")
         case Sequence(exprs, nameOpt) => nameOpt.map(_.asParamName).getOrElse {
@@ -289,7 +305,7 @@ object SmallSteps extends App {
               } else {
                 name + "s"
               }
-            case _ => "sequence"
+            case _ => "list"
           }
         }
       }

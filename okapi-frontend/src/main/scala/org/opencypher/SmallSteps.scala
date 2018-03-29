@@ -2,59 +2,14 @@ package org.opencypher
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import org.opencypher.okapi.trees.{AbstractTreeNode, BottomUp, TopDown}
+import org.opencypher.okapi.trees.BottomUp
 import org.opencypher.tools.grammar.Helpers._
 import org.opencypher.tools.grammar._
-
-// Use only the simplest atomic parsing concepts
-// Rewrite later on to make more efficient
 
 object SmallSteps extends App {
   val anonCounter = new AtomicInteger()
 
   val rules: Map[String, Rule] = CypherGrammar.parserRules()
-
-  //abstract class RightArrowHead extends RelationshipPattern
-  //  oC_BooleanLiteral : TRUE
-  //  | FALSE
-
-  //println(usages)
-  //  traverse(0, "Cypher")
-  //  var maxDepth = 0
-  //
-  //  def traverse(depth: Int = 0, ruleName: String, encounteredBefore: Set[String] = Set.empty): Unit = {
-  //    if (depth > maxDepth) {
-  //      println(s"$maxDepth with ${encounteredBefore.size} entries")
-  //      maxDepth = math.max(maxDepth, depth)
-  //    }
-  //    rules(ruleName).foreach { c: GrammarExpr =>
-  //      c match {
-  //        case RuleRef(n) =>
-  //          if (encounteredBefore.contains(n)) {
-  //            throw new Exception(s"Cycle detected: $ruleName => $n")
-  //          }
-  //          traverse(depth + 1, n, encounteredBefore + ruleName)
-  //        case _ =>
-  //      }
-  //    }
-  //  }
-
-  //  var rewritten = Set.empty[GrammarExpr]
-  //
-  //  val assembleParseTree = TopDown[GrammarExpr] {
-  //    case r@RuleRef(ruleName) =>
-  //      val rule = rules(ruleName)
-  //      if (rewritten.contains(rule)) {
-  //        println(s"already encountered:\n${rule.pretty}")
-  //        r
-  //      } else {
-  //        rewritten += rule
-  //        rule
-  //      }
-  //  }
-  ////  val root = assembleParseTree.rewrite(rules("Cypher"))
-  //
-  //  println(root.pretty)
 
 
   //TODO: Cover all cases elegantly: Arbitrary many elements before first, and arbitrarily many elements of type None as separators
@@ -94,21 +49,6 @@ object SmallSteps extends App {
       }
     }
   }
-
-  //val root = rewrittenRules("Cypher")
-
-  // Infer common supertype for multiple rules by walking up the usage tree
-
-  // For each rule that has a ScalaType, find out in which other rules it is used.
-  // If there are several, check if one is a valid instance of the other.
-  // Determine if it ever happens that this is not the case.
-  //
-  //  val rulesWithScalaType = rules.map { case (n, r) => n -> r.scalaType(rules) }.foreach {
-  //    case (n, t) => t match {
-  //      case None => println(s"$n has no scala type") // Only SP has no Scala type
-  //      case Some(_) =>
-  //    }
-  //  }
 
   def computeUsages(ruleName: String, r: Map[String, Rule]): (String, Set[String]) = {
     val usedBy = r.foldLeft(Set.empty[String]) { case (u, (n2, r2)) =>
@@ -177,17 +117,6 @@ object SmallSteps extends App {
 
   println(classDefs)
 
-  //  val r = rulesWithParentTypes("CaseAlternatives")
-  //  println(r.parameters(rulesWithParentTypes))
-
-
-  //  var nextId = 0
-  //
-  //  def generateId: Int = {
-  //    nextId += 1
-  //    nextId
-  //  }
-
   def generateRuleName(childRules: List[GrammarExpr]): String = {
     s"GeneratedAbstractClass${childRules.hashId}"
   }
@@ -198,52 +127,6 @@ object SmallSteps extends App {
       (a.hashCode & Int.MaxValue) % 100
     }
   }
-
-  //  val eitherRules = rewrittenRules.values.foldLeft(List.empty[(GrammarExpr, List[GrammarExpr])]) { case (eithers, rule) =>
-  //    rule.foldLeft(eithers) { case (eithersInner, expr) => expr match {
-  //      case e: GrammarExpr if e.children.hasA[Either] =>
-  //        val newRulesForEithers = e.children.mapOnly()
-  //        ???
-  //      case _ => eithersInner
-  //    }
-  //    }
-  //  }
-
-
-  //    rule.foldLeft(eithers) { case (eithersInner, expr) => expr match {
-  //      case e: GrammarExpr => if e.children.exists(_.isInstanceOf[Either]) =>
-  //    eithersInner ++ e -> e.children.filter (_.isInstanceOf[Either] )
-  //      case _ => eithersInner
-  //    }
-  //    }
-  //  }
-
-  //  def transform(ruleName: String): Unit = {
-  //    val rule = rewrittenRules(ruleName)
-  //
-  //    println(rule.definition.pretty)
-  //    val asScala = rule.scalaType(rewrittenRules)
-  //    println(asScala)
-  //    println(rule.asScalaClass(rewrittenRules).get)
-  //    //???
-  //  }
-
-  //rules.values.filter(_.lexer).foreach(r => println(r.name))
-
-  //transform("WHERE")
-  //Parameter
-  //transform("NodeLabels")
-
-  //  transform("Parameter")
-
-  //transform("Cypher")
-
-  //oC_NodeLabels : oC_NodeLabel ( SP? oC_NodeLabel )* ;"
-
-  /**
-    *
-    * @param r
-    */
 
   implicit class ParametersForRule(val r: Rule) extends AnyVal {
     def asScalaClass(implicit ruleMap: Map[String, Rule], rootClass: AbstractClassType = rootExpressionType): Option[String] = {
@@ -379,56 +262,4 @@ object SmallSteps extends App {
 
 }
 
-//abstract class Parser extends AbstractTreeNode[Parser] {
-//  def parser: String
-//
-//
-//  def outputType: ScalaType
-//}
 
-
-case class Parameter(name: String, typ: ScalaType) {
-  override def toString = s"$name: $typ"
-}
-
-abstract class ScalaType extends AbstractTreeNode[ScalaType] {
-  def name: String
-
-  def asParameter: String = toString.firstCharToLowerCase
-
-  override def toString = name
-}
-
-case object StringType extends ScalaType {
-  def name = "String"
-}
-
-object AbstractClassType {
-  def apply(name: String, superClass: AbstractClassType) = new AbstractClassType(name, Some(superClass))
-}
-
-case class AbstractClassType(name: String, superClass: Option[AbstractClassType] = None) extends ScalaType
-
-case class CaseClassType(name: String, parameters: List[Parameter], superClass: Option[AbstractClassType]) extends ScalaType
-
-case class ListType(elementType: ScalaType) extends ScalaType {
-  override def asParameter: String = {
-    val elementAsParam = elementType.asParameter
-    if (elementAsParam.endsWith("s")) elementAsParam else elementAsParam + "s"
-  }
-
-  override def name: String = s"List[$elementType]"
-}
-
-case class OptionType(elementType: ScalaType) extends ScalaType {
-  override def asParameter: String = s"${elementType.asParameter}Opt"
-
-  override def name: String = s"Option[$elementType]"
-}
-
-//
-//abstract class Parser extends AbstractTreeNode[Parser]
-//
-//case class StringInIgnoreCaseParser(parameter: String) extends Parser {
-//  override def toString = s"""StringInIgnoreCase("$parameter")"""
-//}

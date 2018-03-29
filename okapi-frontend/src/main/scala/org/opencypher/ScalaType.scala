@@ -12,7 +12,7 @@ abstract class ScalaType extends AbstractTreeNode[ScalaType] {
 
   def superClass: Option[AbstractClassType] = None
 
-  def asParameter: String = toString.firstCharToLowerCase
+  def asParameter: String = toString.asParamName
 
   override def toString: String = name
 }

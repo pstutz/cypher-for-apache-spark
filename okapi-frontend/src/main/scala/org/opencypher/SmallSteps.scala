@@ -4,7 +4,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import org.opencypher.okapi.trees.BottomUp
 import org.opencypher.tools.grammar.Helpers._
-import org.opencypher.tools.grammar._
 
 object SmallSteps extends App {
   val anonCounter = new AtomicInteger()
@@ -90,12 +89,6 @@ object SmallSteps extends App {
               } else {
                 Some(AbstractClassType(parentRuleName))
               }
-            case List(Parameter(_, a), Parameter(_, ListType(b))) =>
-              if (a == b) {
-                parentType(parentRuleName)
-              } else {
-                Some(rootType)
-              }
             case _ => Some(rootType)
           }
         } else {
@@ -117,7 +110,11 @@ object SmallSteps extends App {
 
   println(classDefs)
 
-  
+
+  implicit class ParserGenerator(val e: GrammarExpr) extends AnyVal {
+
+  }
+
 
   implicit class ClassGenerator(val r: Rule) extends AnyVal {
     def asScalaClass(implicit ruleMap: Map[String, Rule], rootClass: AbstractClassType = rootExpressionType): Option[String] = {

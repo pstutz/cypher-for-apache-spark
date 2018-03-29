@@ -25,7 +25,7 @@ abstract class GrammarExpr extends AbstractTreeNode[GrammarExpr] {
   def nameOpt: Option[String]
 
   def parameterName(implicit ruleMap: Map[String, Rule]): String = {
-    nameOpt.getOrElse(scalaType.get.asParameter)
+    nameOpt.map(_.asParamName).getOrElse(scalaType.get.asParameter)
   }
 
   def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType]
@@ -142,7 +142,7 @@ case class Sequence(exprs: List[TermExpr], nameOpt: Option[String] = None) exten
       val name = generateRuleName(exprs)
       val parametersWithTypes = exprs.flatMap(e => e.scalaType.map(e -> _)).toMap
       val params = parametersWithTypes.map { case (expr, typ) => Parameter(expr.parameterName, typ) }.toList
-      val c = CaseClassType(name, params, None)
+      val c = CaseClassType(name.asParamName, params, None)
       Some(c)
       //throw new Exception(s"Could not determine element type for list: elements ${exprs} with types $elementTypes")
     }

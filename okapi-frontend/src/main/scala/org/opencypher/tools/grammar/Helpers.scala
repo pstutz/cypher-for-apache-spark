@@ -47,12 +47,17 @@ object Helpers {
     }
 
     def asParamName: String = {
-      if (isUpper) {
+      val properCase = if (isUpper) {
         s.toLowerCase
       } else {
         firstCharToLowerCase
       }
+      properCase match {
+        case "with" => "withClause"
+        case other => other
+      }
     }
+
   }
 
 

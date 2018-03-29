@@ -43,7 +43,11 @@ case class Rule(name: String, parentClassOpt: Option[AbstractClassType], inline:
       definition match {
         case Either(sl, _) if sl.are[IgnoreCaseLiteral] => // Case class that wraps one string
           Some(CaseClassType(name, List(Parameter(name.asParamName, StringType)), parentClassOpt))
-        case _: Either => Some(AbstractClassType(name, parentClassOpt))
+        case _: Either =>
+          Some(AbstractClassType(name, parentClassOpt))
+        case RuleRef(childName) if ruleMap(childName).scalaType.flatMap(_.superClass.map(_.name)).contains(name) =>
+          // Child already extends parent, parent can be abstract
+          Some(AbstractClassType(name, parentClassOpt))
         case _ => Some(CaseClassType(name, parameters, parentClassOpt))
       }
     }

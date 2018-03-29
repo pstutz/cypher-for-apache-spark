@@ -10,6 +10,8 @@ case class Parameter(name: String, typ: ScalaType) {
 abstract class ScalaType extends AbstractTreeNode[ScalaType] {
   def name: String
 
+  def superClass: Option[AbstractClassType] = None
+
   def asParameter: String = toString.firstCharToLowerCase
 
   override def toString: String = name
@@ -23,9 +25,9 @@ object AbstractClassType {
   def apply(name: String, superClass: AbstractClassType) = new AbstractClassType(name, Some(superClass))
 }
 
-case class AbstractClassType(name: String, superClass: Option[AbstractClassType] = None) extends ScalaType
+case class AbstractClassType(name: String, override val superClass: Option[AbstractClassType] = None) extends ScalaType
 
-case class CaseClassType(name: String, parameters: List[Parameter], superClass: Option[AbstractClassType]) extends ScalaType
+case class CaseClassType(name: String, parameters: List[Parameter], override val superClass: Option[AbstractClassType]) extends ScalaType
 
 case class ListType(elementType: ScalaType) extends ScalaType {
   override def asParameter: String = {

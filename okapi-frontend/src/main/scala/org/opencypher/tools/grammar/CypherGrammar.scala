@@ -8,25 +8,33 @@ import org.opencypher.okapi.trees.{AbstractTreeNode, BottomUp}
 import org.opencypher.tools.grammar.Helpers._
 
 
-abstract class GrammarExpr extends AbstractTreeNode[GrammarExpr]
+abstract class GrammarExpr extends AbstractTreeNode[GrammarExpr] {
+  def nameOpt: Option[String]
+}
 
-case class Rule(name: String, parentClassOpt: Option[AbstractClassType], inline: Boolean, lexer: Boolean, definition: GrammarExpr) extends GrammarExpr
+case class Rule(name: String, parentClassOpt: Option[AbstractClassType], inline: Boolean, lexer: Boolean, definition: GrammarExpr) extends GrammarExpr {
+  override def nameOpt: Option[String] = Some(name)
+}
 
 abstract class TermExpr extends GrammarExpr
 
-case class RuleRef(ruleName: String) extends TermExpr
+case class RuleRef(ruleName: String) extends TermExpr {
+  override def nameOpt: Option[String] = Some(ruleName)
+}
 
 abstract class Literal extends TermExpr
 
-case class StringLiteral(s: String) extends Literal
+case class StringLiteral(s: String) extends Literal {
+  override def nameOpt: Option[String] = Some(s)
+}
 
-case class CharNotIn(name: Option[String], chars: String) extends Literal
+case class CharNotIn(nameOpt: Option[String], chars: String) extends Literal
 
-case class CharIn(name: Option[String], chars: String) extends Literal
+case class CharIn(nameOpt: Option[String], chars: String) extends Literal
 
-case class Fragment(name: Option[String], ps: Set[Int], namedInclusions: Set[String], namedExclusions: Set[String]) extends Literal
+case class Fragment(nameOpt: Option[String], ps: Set[Int], namedInclusions: Set[String], namedExclusions: Set[String]) extends Literal
 
-case class IgnoreCaseLiteral(name: Option[String], s: String) extends Literal
+case class IgnoreCaseLiteral(nameOpt: Option[String], s: String) extends Literal
 
 case class RepeatWithSeparator(expr: TermExpr, sep: TermExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String]) extends TermExpr
 

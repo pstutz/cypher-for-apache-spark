@@ -15,6 +15,9 @@ import scala.reflect.ClassTag
 object Helpers {
 
   implicit class RichString(s: String) {
+
+    def letters: String = s.filter(_.isLetter)
+
     def isUpper: Boolean = s.toCharArray.forall(_.isUpper)
 
     def isKeyword: Boolean = s.isUpper && s.toCharArray.forall(_.isLetter)
@@ -25,6 +28,16 @@ object Helpers {
       } else {
         val c = s.toCharArray
         c(0) = Character.toLowerCase(c(0))
+        new String(c)
+      }
+    }
+
+    def firstCharToUpperCase: String = {
+      if (s.length == 0) {
+        s
+      } else {
+        val c = s.toCharArray
+        c(0) = Character.toUpperCase(c(0))
         new String(c)
       }
     }

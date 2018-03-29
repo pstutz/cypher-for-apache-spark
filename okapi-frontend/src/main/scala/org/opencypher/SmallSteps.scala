@@ -10,7 +10,6 @@ object SmallSteps extends App {
 
   val rules: Map[String, Rule] = CypherGrammar.parserRules()
 
-
   //TODO: Cover all cases elegantly: Arbitrary many elements before first, and arbitrarily many elements of type None as separators
   // Repeat with separator
   def repSep(implicit ruleMap: Map[String, Rule]) = BottomUp[GrammarExpr] {
@@ -110,11 +109,17 @@ object SmallSteps extends App {
 
   println(classDefs)
 
-
   implicit class ParserGenerator(val e: GrammarExpr) extends AnyVal {
-
+    def asParser(implicit ruleMap: Map[String, Rule]): String = {
+      val resultType = e.scalaType.getOrElse(StringType)
+      resultType match {
+        case StringType =>
+        s"  def apply(s: String): P[String] = P ( ${e.parserString} )"
+        case r =>
+        s"  def apply(s: String): P[$r] = P ( ${e.parserString} ).map(${r.toString})"
+      }
+    }
   }
-
 
   implicit class ClassGenerator(val r: Rule) extends AnyVal {
     def asScalaClass(implicit ruleMap: Map[String, Rule], rootClass: AbstractClassType = rootExpressionType): Option[String] = {
@@ -122,6 +127,9 @@ object SmallSteps extends App {
         case Some(CaseClassType(name, parameters, superClassOption)) =>
           Some(
             s"""|case class $name(${parameters.mkString(", ")}) extends ${superClassOption.getOrElse(rootClass)}
+                |object $name {
+                |  ${r.asParser}
+                |}
                 |/**
                 |Grammar expression:
                 |${r.pretty}*/""".stripMargin)

@@ -29,6 +29,8 @@ abstract class GrammarExpr extends AbstractTreeNode[GrammarExpr] {
   }
 
   def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType]
+
+  def parserString(implicit ruleMap: Map[String, Rule]): String
 }
 
 case class Rule(name: String, parentClassOpt: Option[AbstractClassType], inline: Boolean, lexer: Boolean, definition: GrammarExpr) extends GrammarExpr {
@@ -63,6 +65,8 @@ case class Rule(name: String, parentClassOpt: Option[AbstractClassType], inline:
       case other => other.scalaType.map(Parameter(other.parameterName, _)).toList
     }
   }
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = definition.parserString
 }
 
 abstract class TermExpr extends GrammarExpr
@@ -73,40 +77,86 @@ case class RuleRef(ruleName: String) extends TermExpr {
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = {
     ruleMap(ruleName).scalaType
   }
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = ruleName
 }
 
 abstract class Literal extends TermExpr {
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = Some(StringType)
 }
 
+// TODO: no need to return the string
 case class StringLiteral(s: String) extends Literal {
   override def nameOpt: Option[String] = Some(s)
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s""""$s""""
 }
 
-case class CharNotIn(nameOpt: Option[String], chars: String) extends Literal
+case class CharNotIn(nameOpt: Option[String], chars: String) extends Literal {
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""CharNotIn("$chars")"""
+}
 
-case class CharIn(nameOpt: Option[String], chars: String) extends Literal
+case class CharIn(nameOpt: Option[String], chars: String) extends Literal {
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""CharIn("$chars")"""
+}
 
 case class Fragment(nameOpt: Option[String], ps: Set[Int], namedInclusions: Set[String], namedExclusions: Set[String]) extends Literal {
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = None
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
+    val unicodeChars = ps.map(codePoint => Character.toString(codePoint.toChar)).mkString
+    s"""CharIn("$unicodeChars")"""
+  }
 }
 
+// TODO: no need to return the string
 case class IgnoreCaseLiteral(nameOpt: Option[String], s: String) extends Literal {
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = None
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""IgnoreCase("$s")"""
 }
 
-
+// TODO: "exactly" special case
 abstract class Repeat extends TermExpr {
   def expr: GrammarExpr
 
   def min: Int
 
+  def maxOpt: Option[Int]
+
+  protected def minString = {
+    if (min > 0) {
+      Some(s"min = $min")
+    } else {
+      None
+    }
+  }
+
+  protected def maxString = {
+    maxOpt.map(m => s"max = $m")
+  }
+
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = expr.scalaType.map(ListType)
 }
 
-case class RepeatWithSeparator(expr: TermExpr, sep: TermExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String]) extends Repeat
+case class RepeatWithSeparator(expr: TermExpr, sep: TermExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String]) extends Repeat {
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
+    val sepString = Some(s"sep = (${sep.parserString})")
+    val repArgs = List(sepString, minString, maxString).flatten.mkString(", ")
+    s"(${expr.parserString}).rep($repArgs)"
+  }
+}
 
-case class SimpleRepeat(expr: GrammarExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String] = None) extends Repeat
+case class SimpleRepeat(expr: GrammarExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String] = None) extends Repeat {
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
+    val repArgs =  List(minString, maxString).flatten.mkString(", ")
+    if (repArgs == "") {
+      s"(${expr.parserString}).rep"
+    } else {
+      s"(${expr.parserString}).rep($repArgs)"
+    }
+  }
+}
 
 case class Optional(expr: GrammarExpr, nameOpt: Option[String] = None) extends TermExpr {
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = {
@@ -116,6 +166,8 @@ case class Optional(expr: GrammarExpr, nameOpt: Option[String] = None) extends T
       case other => other.map(OptionType)
     }
   }
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"(${expr.parserString}).?"
 }
 
 case class Either(exprs: List[GrammarExpr], nameOpt: Option[String] = None) extends TermExpr {
@@ -128,6 +180,10 @@ case class Either(exprs: List[GrammarExpr], nameOpt: Option[String] = None) exte
       }"
     }
     Some(AbstractClassType(className))
+  }
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
+    s"(${exprs.map(e => s"(${e.parserString})").mkString(" | ")})"
   }
 }
 
@@ -146,6 +202,10 @@ case class Sequence(exprs: List[TermExpr], nameOpt: Option[String] = None) exten
       Some(c)
       //throw new Exception(s"Could not determine element type for list: elements ${exprs} with types $elementTypes")
     }
+  }
+
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
+    s"(${exprs.map(e => s"(${e.parserString})").mkString(" ~ ")})"
   }
 }
 

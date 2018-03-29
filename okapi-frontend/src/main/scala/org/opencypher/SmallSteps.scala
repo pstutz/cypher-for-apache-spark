@@ -15,25 +15,25 @@ object SmallSteps extends App {
   //TODO: Cover all cases elegantly: Arbitrary many elements before first, and arbitrarily many elements of type None as separators
   // Repeat with separator
   def repSep(implicit ruleMap: Map[String, Rule]) = BottomUp[GrammarExpr] {
-    case Sequence(List(a, Repeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
+    case Sequence(List(a, SimpleRepeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
       if a == inner.last && inner.dropRight(1).forall(_.scalaType.isEmpty) =>
       val nameOpt: Option[String] = List(seqNameOpt, repNameOpt, innerSeqName, a.scalaType.map(t => (t.toString + "s").asParamName)).flatten.headOption
       RepeatWithSeparator(a, Sequence(inner.dropRight(1)), min + 1, maxOpt.map(_ + 1), nameOpt)
 
     // TODO: Create rewriting facilities to express this concisely
-    case Sequence(List(p1, a, Repeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
+    case Sequence(List(p1, a, SimpleRepeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
       if a == inner.last && inner.dropRight(1).forall(_.scalaType.isEmpty) =>
       val nameOpt: Option[String] = List(seqNameOpt, repNameOpt, innerSeqName, a.scalaType.map(t => (t.toString + "s").asParamName)).flatten.headOption
       Sequence(List(p1, RepeatWithSeparator(a, Sequence(inner.dropRight(1)), min + 1, maxOpt.map(_ + 1), nameOpt)), seqNameOpt)
 
     // TODO: Create rewriting facilities to express this concisely
-    case Sequence(List(p1, p2, a, Repeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
+    case Sequence(List(p1, p2, a, SimpleRepeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
       if a == inner.last && inner.dropRight(1).forall(_.scalaType.isEmpty) =>
       val nameOpt: Option[String] = List(seqNameOpt, repNameOpt, innerSeqName, a.scalaType.map(t => (t.toString + "s").asParamName)).flatten.headOption
       Sequence(List(p1, p2, RepeatWithSeparator(a, Sequence(inner.dropRight(1)), min + 1, maxOpt.map(_ + 1), nameOpt)), seqNameOpt)
 
     // TODO: Create rewriting facilities to express this concisely
-    case Sequence(List(p1, p2, p3, a, Repeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
+    case Sequence(List(p1, p2, p3, a, SimpleRepeat(Sequence(inner, innerSeqName), min, maxOpt, repNameOpt)), seqNameOpt)
       if a == inner.last && inner.dropRight(1).forall(_.scalaType.isEmpty) =>
       val nameOpt: Option[String] = List(seqNameOpt, repNameOpt, innerSeqName, a.scalaType.map(t => (t.toString + "s").asParamName)).flatten.headOption
       Sequence(List(p1, p2, p3, RepeatWithSeparator(a, Sequence(inner.dropRight(1)), min + 1, maxOpt.map(_ + 1), nameOpt)), seqNameOpt)
@@ -117,18 +117,9 @@ object SmallSteps extends App {
 
   println(classDefs)
 
-  def generateRuleName(childRules: List[GrammarExpr]): String = {
-    s"GeneratedAbstractClass${childRules.hashId}"
-  }
+  
 
-
-  implicit class IdGeneration(a: Any) {
-    def hashId: Int = {
-      (a.hashCode & Int.MaxValue) % 100
-    }
-  }
-
-  implicit class ParametersForRule(val r: Rule) extends AnyVal {
+  implicit class ClassGenerator(val r: Rule) extends AnyVal {
     def asScalaClass(implicit ruleMap: Map[String, Rule], rootClass: AbstractClassType = rootExpressionType): Option[String] = {
       r.scalaType match {
         case Some(CaseClassType(name, parameters, superClassOption)) =>
@@ -178,87 +169,8 @@ object SmallSteps extends App {
       }
     }
 
-    def parameters(implicit ruleMap: Map[String, Rule]): List[Parameter] = {
-      r.definition match {
-        case _: Either => Nil
-        case Sequence(exprs, _) =>
-          val parametersWithTypes = exprs.flatMap(e => e.scalaType.map(e -> _))
-          val params = parametersWithTypes.map { case (expr, typ) => Parameter(expr.parameterName, typ) }
-          params
-        case other => other.scalaType.map(Parameter(other.parameterName, _)).toList
-      }
-    }
   }
 
-  implicit class GrammarToScala(val expr: GrammarExpr) extends AnyVal {
-
-    def parameterName(implicit ruleMap: Map[String, Rule]): String = {
-      val predefinedName: Option[String] = expr match {
-        case Rule(name, _, _, _, _) => Some(name.asParamName)
-        case RuleRef(ruleName) => Some(ruleName.asParamName)
-        case l: Literal => Some(l.getClass.getSimpleName.asParamName)
-        case RepeatWithSeparator(e, _, _, _, nameOpt) => nameOpt.map(_.asParamName)
-        case Repeat(e, _, _, nameOpt) => nameOpt.map(_.asParamName)
-        case Optional(e, nameOpt) => nameOpt.map(_.asParamName)
-        case Either(_, nameOpt) => nameOpt.map(_.asParamName)
-        case Sequence(exprs, nameOpt) => nameOpt.map(_.asParamName)
-      }
-      predefinedName.getOrElse(expr.scalaType.get.asParameter)
-    }
-
-    def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = {
-      expr match {
-        case r@Rule(name, parentClassOpt, inline, lexer, definition) =>
-          if (lexer && name.isUpper) {
-            None
-          } else if (lexer) {
-            Some(StringType)
-          } else {
-            definition match {
-              case Either(sl, _) if sl.are[IgnoreCaseLiteral] => // Case class that wraps one string
-                Some(CaseClassType(name, List(Parameter(name.asParamName, StringType)), parentClassOpt))
-              case _: Either => Some(AbstractClassType(name, parentClassOpt))
-              case _ => Some(CaseClassType(name, r.parameters, parentClassOpt))
-            }
-          }
-        case RuleRef(ruleName) => ruleMap(ruleName).scalaType
-        case _: IgnoreCaseLiteral => None
-        case Fragment(Some(fName), _, _, _) if fName.isUpper => None
-        case _: Literal => Some(StringType)
-        case Repeat(e, _, _, _) => e.scalaType.map(ListType)
-        case RepeatWithSeparator(e, _, _, _, _) => e.scalaType.map(ListType)
-        case Optional(e, _) => e.scalaType match {
-          case l@Some(ListType(_)) => l
-          case o@Some(OptionType(_)) => o
-          case other => other.map(OptionType)
-        }
-        case Either(exprs, nameOpt) =>
-          val className = expr.nameOpt.getOrElse {
-            s"${
-              nameOpt.getOrElse {
-                //s"${exprs.flatMap(_.scalaType).map(_.toString).mkString("").firstCharToLowerCase}Generated"
-                s"GeneratedAbstractClass${exprs.hashId}"
-              }
-            }"
-          }
-          Some(AbstractClassType(className))
-        case Sequence(exprs, _) =>
-          val elementTypes = exprs.flatMap(_.scalaType)
-          if (elementTypes.size == 1) {
-            Some(elementTypes.head)
-          } else if (elementTypes.isEmpty) {
-            None
-          } else {
-            val name = generateRuleName(exprs)
-            val parametersWithTypes = exprs.flatMap(e => e.scalaType.map(e -> _)).toMap
-            val params = parametersWithTypes.map { case (expr, typ) => Parameter(expr.parameterName, typ) }.toList
-            val c = CaseClassType(name, params, None)
-            Some(c)
-            //throw new Exception(s"Could not determine element type for list: elements ${exprs} with types $elementTypes")
-          }
-      }
-    }
-  }
 
 }
 

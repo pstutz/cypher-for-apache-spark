@@ -1,5 +1,7 @@
 package org.opencypher.tools.grammar
 
+import org.opencypher
+import org.opencypher.{Fragment, IgnoreCaseLiteral, Optional, SimpleRepeat, Rule, RuleRef, Sequence, StringLiteral, TermExpr}
 import org.opencypher.grammar.CharacterSet.DefinitionVisitor.NamedSetVisitor
 import org.opencypher.grammar.CharacterSet.ExclusionVisitor
 import org.opencypher.grammar.Grammar.Term
@@ -11,6 +13,8 @@ import scala.collection.generic.CanBuildFrom
 import scala.collection.immutable.List
 import scala.collection.mutable
 import scala.reflect.ClassTag
+
+import org.opencypher.Either
 
 object Helpers {
 
@@ -110,7 +114,7 @@ object Helpers {
 
   implicit class RichProduction(p: Production) {
     def convert: Rule = {
-      Rule(p.name, None, p.inline, p.lexer, p.definition.convert)
+      opencypher.Rule(p.name, None, p.inline, p.lexer, p.definition.convert)
     }
   }
 
@@ -153,7 +157,7 @@ object Helpers {
 
         override def visitRepetition(repetition: Repetition): Unit = {
           val max = if (repetition.limited) Some(repetition.maxTimes) else None
-          _result = Repeat(repetition.term.convert, repetition.minTimes, max, None)
+          _result = SimpleRepeat(repetition.term.convert, repetition.minTimes, max, None)
         }
       }
 
@@ -200,7 +204,7 @@ object Helpers {
   }
 
   implicit class RichLiteral(l: org.opencypher.grammar.Literal) {
-    def convert: Literal = {
+    def convert: opencypher.Literal = {
       if (l.caseSensitive) StringLiteral(l.toString) else IgnoreCaseLiteral(None, l.toString)
     }
   }

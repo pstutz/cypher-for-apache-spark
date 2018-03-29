@@ -12,7 +12,7 @@ abstract class ScalaType extends AbstractTreeNode[ScalaType] {
 
   def asParameter: String = toString.firstCharToLowerCase
 
-  override def toString = name
+  override def toString: String = name
 }
 
 case object StringType extends ScalaType {

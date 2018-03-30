@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.opencypher.okapi.trees.BottomUp
 import org.opencypher.tools.grammar.Helpers._
 
+// TODO: Turn abstract classes into tuples instead
 object SmallSteps extends App {
   val anonCounter = new AtomicInteger()
 
@@ -75,7 +76,7 @@ object SmallSteps extends App {
         val us: Set[String] = usages(ruleName)
         if (us.isEmpty) {
           Some(rootType)
-        } else if (us.size == 1) {
+        } else { // if (us.size == 1)
           val parentRuleName = us.head
           val parentRule: Rule = rewrittenRules(parentRuleName)
           val parentParams = parentRule.parameters(rewrittenRules)
@@ -90,9 +91,10 @@ object SmallSteps extends App {
               }
             case _ => Some(rootType)
           }
-        } else {
-          Some(rootType)
         }
+//    else {
+//          Some(rootType)
+//        }
     }
   }
 
@@ -107,16 +109,29 @@ object SmallSteps extends App {
     }
   }.mkString("\n")
 
+  println(
+    """
+      |package org.opencypher
+      |
+      |import org.opencypher.okapi.trees.AbstractTreeNode
+      |import fastparse.all._
+      |
+      |abstract class CypherAst extends AbstractTreeNode[CypherAst]
+      |
+    """.stripMargin)
+
   println(classDefs)
 
   implicit class ParserGenerator(val e: GrammarExpr) extends AnyVal {
     def asParser(implicit ruleMap: Map[String, Rule]): String = {
       val resultType = e.scalaType.getOrElse(StringType)
       resultType match {
-        case StringType =>
-        s"  def apply(s: String): P[String] = P ( ${e.parserString} )"
-        case r =>
-        s"  def apply(s: String): P[$r] = P ( ${e.parserString} ).map(${r.toString})"
+        case StringType if e.children.size == 1 && e.children(0).isInstanceOf[Sequence] => // Concatenate strings
+          s"""|  val parser: P[String] = P ( ${e.parserString} ).map(_.productIterator.mkString)
+              |  def apply(s: String): String = parser.parse(s).get.value""".stripMargin
+        case _ =>
+          s"""|  val parser: P[$resultType] = P ( ${e.parserString} ).map(${resultType})
+              |  def apply(s: String): $resultType = parser.parse(s).get.value""".stripMargin
       }
     }
   }
@@ -128,7 +143,7 @@ object SmallSteps extends App {
           Some(
             s"""|case class $name(${parameters.mkString(", ")}) extends ${superClassOption.getOrElse(rootClass)}
                 |object $name {
-                |  ${r.asParser}
+                |${r.asParser}
                 |}
                 |/**
                 |Grammar expression:
@@ -163,14 +178,23 @@ object SmallSteps extends App {
           }
           val abstractParentClass =
             s"""|abstract class $name extends ${superClassOption.getOrElse(rootClass)}
+                |object $name {
+                |${r.asParser}
+                |}
                 |/**
                 |Grammar expression:
                 |${r.pretty}*/""".stripMargin
           val allClasses = abstractParentClass :: implementations
           Some(allClasses.mkString("\n"))
         case _ =>
-          None
-        //throw new Exception(s"Could not turn $r into a scala class")
+          val parser =
+            s"""|object ${r.name} {
+                |${r.asParser}
+                |}
+                |/**
+                |Grammar expression:
+                |${r.pretty}*/""".stripMargin
+          Some(parser)
       }
     }
 

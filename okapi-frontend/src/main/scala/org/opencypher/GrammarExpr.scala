@@ -78,14 +78,13 @@ case class RuleRef(ruleName: String) extends TermExpr {
     ruleMap(ruleName).scalaType
   }
 
-  override def parserString(implicit ruleMap: Map[String, Rule]): String = ruleName
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"$ruleName.parser"
 }
 
 abstract class Literal extends TermExpr {
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = Some(StringType)
 }
 
-// TODO: no need to return the string
 case class StringLiteral(s: String) extends Literal {
   override def nameOpt: Option[String] = Some(s)
 
@@ -93,11 +92,11 @@ case class StringLiteral(s: String) extends Literal {
 }
 
 case class CharNotIn(nameOpt: Option[String], chars: String) extends Literal {
-  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""CharNotIn("$chars")"""
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""CharNotIn("$chars").!"""
 }
 
 case class CharIn(nameOpt: Option[String], chars: String) extends Literal {
-  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""CharIn("$chars")"""
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""CharIn("$chars").!"""
 }
 
 case class Fragment(nameOpt: Option[String], ps: Set[Int], namedInclusions: Set[String], namedExclusions: Set[String]) extends Literal {
@@ -105,15 +104,14 @@ case class Fragment(nameOpt: Option[String], ps: Set[Int], namedInclusions: Set[
 
   override def parserString(implicit ruleMap: Map[String, Rule]): String = {
     val unicodeChars = ps.map(codePoint => Character.toString(codePoint.toChar)).mkString
-    s"""CharIn("$unicodeChars")"""
+    s"""CharIn("$unicodeChars").!"""
   }
 }
 
-// TODO: no need to return the string
 case class IgnoreCaseLiteral(nameOpt: Option[String], s: String) extends Literal {
   override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = None
 
-  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""IgnoreCase("$s")"""
+  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"""IgnoreCase("$s").!"""
 }
 
 // TODO: "exactly" special case

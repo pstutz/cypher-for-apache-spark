@@ -76,6 +76,7 @@
     <dep.spark.version>2.2.1</dep.spark.version>
     <dep.spark.scope>compile</dep.spark.scope>
     <dep.upickle.version>0.6.6</dep.upickle.version>
+    <dep.fastparse.version>1.0.0</dep.fastparse.version>
 
     <!-- Test scope dependencies -->
     <dep.bouncycastle.version>1.57</dep.bouncycastle.version>
@@ -361,6 +362,7 @@
       <!-- No license listing for this profile -->
       <modules>
         <module>okapi-api</module>
+        <module>okapi-frontend</module>
         <module>okapi-ir</module>
         <module>okapi-logical</module>
         <module>okapi-relational</module>
@@ -417,6 +419,7 @@
       <modules>
         <module>licensecheck-config</module>
         <module>okapi-api</module>
+        <module>okapi-frontend</module>
         <module>okapi-ir</module>
         <module>okapi-logical</module>
         <module>okapi-relational</module>

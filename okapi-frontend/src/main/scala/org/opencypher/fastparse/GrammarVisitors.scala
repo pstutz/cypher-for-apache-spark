@@ -3,7 +3,7 @@ package org.opencypher.fastparse
 import org.opencypher.grammar.CharacterSet.DefinitionVisitor.NamedSetVisitor
 import org.opencypher.grammar.CharacterSet.ExclusionVisitor
 import org.opencypher.grammar.Grammar.Term
-import org.opencypher.grammar.{Alternatives, CharacterSet, NonTerminal, Optional, Production, Repetition, Sequence, TermVisitor, Literal => OcLiteral}
+import org.opencypher.grammar.{Alternatives, CharacterSet, NonTerminal, Optional, Production, Repetition, Sequence => OcSequence, TermVisitor, Literal => OcLiteral}
 
 import scala.collection.JavaConverters._
 
@@ -31,8 +31,8 @@ object GrammarVisitors {
 
         override def visitEpsilon(): Unit = {}
 
-        override def visitSequence(sequence: Sequence): Unit = {
-          _result = Seq(sequence.asScala.toList.map(_.convert))
+        override def visitSequence(sequence: OcSequence): Unit = {
+          _result = Sequence(sequence.asScala.toList.map(_.convert))
         }
 
         override def visitNonTerminal(nonTerminal: NonTerminal): Unit = {
@@ -94,7 +94,6 @@ object GrammarVisitors {
         val builder = CharacterSetBuilder()
         cs.accept(builder)
         builder.result
-        StringLiteral("placeholder for some character set")
       }
     }
 

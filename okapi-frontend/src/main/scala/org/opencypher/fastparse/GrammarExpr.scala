@@ -32,12 +32,12 @@ abstract class Repeat extends TermExpr {
   def maybeMax: scala.Option[Int]
 }
 
-case class RepSep(expr: TermExpr, sep: TermExpr, min: Int, maybeMax: scala.Option[Int]) extends Repeat
-
 case class Rep(expr: GrammarExpr, min: Int, maybeMax: scala.Option[Int]) extends Repeat
+
+case class RepSep(expr: TermExpr, sep: TermExpr, min: Int, maybeMax: scala.Option[Int]) extends Repeat
 
 case class Maybe(expr: GrammarExpr) extends TermExpr
 
 case class Either(exprs: List[GrammarExpr]) extends TermExpr
 
-case class Seq(exprs: List[TermExpr]) extends TermExpr
+case class Sequence(exprs: List[TermExpr]) extends TermExpr

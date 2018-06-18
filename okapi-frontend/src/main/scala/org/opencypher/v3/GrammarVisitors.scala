@@ -1,4 +1,4 @@
-package org.opencypher.fastparse
+package org.opencypher.v3
 
 import org.opencypher.grammar.CharacterSet.DefinitionVisitor.NamedSetVisitor
 import org.opencypher.grammar.CharacterSet.ExclusionVisitor

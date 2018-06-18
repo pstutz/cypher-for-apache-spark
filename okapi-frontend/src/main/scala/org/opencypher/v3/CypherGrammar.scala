@@ -1,8 +1,8 @@
-package org.opencypher.fastparse
+package org.opencypher.v3
 
 import java.io.File
 
-import org.opencypher.fastparse.GrammarVisitors._
+import org.opencypher.v3.GrammarVisitors._
 import org.opencypher.grammar.{Grammar, Production, ProductionVisitor}
 
 object CypherGrammar {

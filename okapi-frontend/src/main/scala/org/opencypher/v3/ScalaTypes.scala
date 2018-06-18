@@ -1,4 +1,4 @@
-package org.opencypher.fastparse
+package org.opencypher.v3
 
 import StringUtilities._
 
@@ -11,7 +11,7 @@ trait ScalaType {
 
   def asParameter: String = s"$nameAsParameter: $typeSignature"
 
-  def scalaClassDef(implements: List[String]): Option[String] = None
+  def scalaClassDef(implements: List[String], methods: List[String]): Option[String] = None
 
   def withParameterName(parameterName: String): ScalaType
 }
@@ -67,18 +67,26 @@ case class ListType(elementType: ScalaType, maybeNameAsParameter: Option[String]
 }
 
 case class TraitType(name: String, maybeNameAsParameter: Option[String] = None) extends ScalaType {
-  //inheritance: List[TraitType],
   override def nameAsParameter: String = maybeNameAsParameter.getOrElse(name.asParamName)
 
   override def typeSignature: String = name
 
-  override def scalaClassDef(implements: List[String]): Option[String] = {
+  override def scalaClassDef(implements: List[String], methods: List[String]): Option[String] = {
     val implString = implements match {
       case Nil => ""
       case h :: Nil => s" extends $h"
       case h :: tail => s" extends $h with ${tail.mkString(" with ")}"
     }
-    Some(s"""trait $name$implString""")
+    val methodsString = methods match {
+      case Nil => ""
+      case ms => s"""|\n\nobject $name {
+                     |
+                     |  ${ms.mkString("\n\n")}
+                     |
+                     |}""".stripMargin
+    }
+
+    Some(s"trait $name$implString$methodsString")
   }
 
   def withParameterName(parameterName: String): ScalaType = copy(maybeNameAsParameter = Some(parameterName))
@@ -90,13 +98,21 @@ case class CaseClassType(name: String, parameters: List[ScalaType], maybeNameAsP
 
   override def typeSignature: String = name
 
-  override def scalaClassDef(implements: List[String]): Option[String] = {
+  override def scalaClassDef(implements: List[String], methods: List[String]): Option[String] = {
     val implString = implements match {
       case Nil => ""
       case h :: Nil => s" extends $h"
       case h :: tail => s" extends $h with ${tail.mkString(" with ")}"
     }
-    Some(s"""case class $name(${parameters.map(_.asParameter).mkString(", ")})$implString""")
+    val methodsString = methods match {
+      case Nil => ""
+      case ms => s"""|\n\nobject $name {
+                     |
+                     |  ${ms.mkString("\n\n  ")}
+                     |
+                     |}""".stripMargin
+    }
+    Some(s"case class $name(${parameters.map(_.asParameter).mkString(", ")})$implString$methodsString")
   }
 
   def withParameterName(parameterName: String): ScalaType = copy(maybeNameAsParameter = Some(parameterName))

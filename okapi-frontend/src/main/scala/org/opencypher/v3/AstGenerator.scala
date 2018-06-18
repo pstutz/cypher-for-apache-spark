@@ -1,4 +1,4 @@
-package org.opencypher.fastparse
+package org.opencypher.v3
 
 import scala.collection.immutable.Set
 import scala.language.higherKinds
@@ -16,21 +16,15 @@ object AstGenerator extends App {
     println
     println(r.definition.semanticContent.map(_.pretty))
     println
+    println(r.parserString)
     //println(r.returnType)
     println()
     println(r.returnType.typeSignature)
-    r.returnType.scalaClassDef(r.parentTraits).foreach(println)
+    val parseMethod = s"def parser: P[${r.returnType.typeSignature}] = P { ${r.parserString} }"
+    r.returnType.scalaClassDef(r.parentTraits, List(parseMethod)).foreach(println)
     println("\n============================================================\n")
   }
-
-  rules.values.foreach { r =>
-    r.returnType.scalaClassDef(r.parentTraits).foreach { d =>
-      if (!d.contains("Anonymous") && !d.contains("Boolean")) {
-        println(d)
-      }
-    }
-  }
-
+  
 }
 
 class ScalaTypeHelper(rules: Map[String, Rule]) {
@@ -43,105 +37,98 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
 
   implicit class GrammarExprConverter(expr: GrammarExpr) {
 
-    def parserString(implicit ruleMap: Map[String, Rule]): String = {
-      expr match {
-        case Rule(_, _, _, definition) => definition.parserString
-        case RuleRef(refName) => s"$refName.parse"
-        case StringLiteral(s) => s"$s"
+    def parserString: String = {
+      val s = expr match {
+        case r@Rule(name, _, _, definition) =>
+          val st = r.returnType
+          st match {
+            case TraitType(_, _) => s"${definition.parserString}"
+            case _ =>
+              val maybeRt = definition.semanticContent.map(_.returnType)
+              maybeRt match {
+                case Some(ListType(_, _)) => s"(${definition.parserString}.toSeq: _*).map(ps => $name(ps.toSeq: _*))"
+                case _ => s"${definition.parserString}.map(p => $name(p))"
+              }
+          }
+
+        case RuleRef(refName) =>
+          s"$refName.parser"
+//          val r = rules(refName)
+//          val signature = r.returnType
+//          signature match {
+//            case StringType(_) => s"${r.definition.parserString}"
+//            case _ => s"$refName.parser"
+//          }
+
+        case StringLiteral(s) => s""""$s""""
+
         case Fragment(ps, _, _) => // TODO: Handle named sets
           val unicodeChars = ps.map(codePoint => Character.toString(codePoint.toChar)).mkString
-          s"""CharIn("$unicodeChars").!"""
-        case IgnoreCaseLiteral(s: String) =>
-        s"""IgnoreCase("$s").!"""
-        case RepSep(expr: TermExpr, sep: TermExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String]) extends Repeat {
-          override def parserString(implicit ruleMap: Map[String, Rule]): String = {
-            val sepString = Some(s"sep = (${sep.parserString})")
-            val repArgs = List(sepString, minString, maxString).flatten.mkString(", ")
-            s"(${expr.parserString}).rep($repArgs)"
-          }
-        }
+          s"""CharIn("$unicodeChars")"""
 
-        //case class SimpleRepeat(expr: GrammarExpr, min: Int, maxOpt: Option[Int], nameOpt: Option[String] = None) extends Repeat {
-        //  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
-        //    val repArgs =  List(minString, maxString).flatten.mkString(", ")
-        //    if (repArgs == "") {
-        //      s"(${expr.parserString}).rep"
-        //    } else {
-        //      s"(${expr.parserString}).rep($repArgs)"
-        //    }
-        //  }
-        //}
-        //
-        //case class Optional(expr: GrammarExpr, nameOpt: Option[String] = None) extends TermExpr {
-        //  override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = {
-        //    expr.scalaType match {
-        //      case l@Some(ListType(_)) => l
-        //      case o@Some(OptionType(_)) => o
-        //      case other => other.map(OptionType)
-        //    }
-        //  }
-        //
-        //  override def parserString(implicit ruleMap: Map[String, Rule]): String = s"(${expr.parserString}).?"
-        //}
-        //
-        //case class Either(exprs: List[GrammarExpr], nameOpt: Option[String] = None) extends TermExpr {
-        //  override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = {
-        //    val className = nameOpt.getOrElse {
-        //      s"${
-        //        nameOpt.getOrElse {
-        //          s"GeneratedAbstractClass${exprs.hashId}"
-        //        }
-        //      }"
-        //    }
-        //    Some(AbstractClassType(className))
-        //  }
-        //
-        //  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
-        //    s"(${exprs.map(e => s"(${e.parserString})").mkString(" | ")})"
-        //  }
-        //}
-        //
-        //case class Sequence(exprs: List[TermExpr], nameOpt: Option[String] = None) extends TermExpr {
-        //  override def scalaType(implicit ruleMap: Map[String, Rule]): Option[ScalaType] = {
-        //    val elementTypes = exprs.flatMap(_.scalaType)
-        //    if (elementTypes.size == 1) {
-        //      Some(elementTypes.head)
-        //    } else if (elementTypes.isEmpty) {
-        //      None
-        //    } else {
-        //      val name = generateRuleName(exprs)
-        //      val parametersWithTypes = exprs.flatMap(e => e.scalaType.map(e -> _)).toMap
-        //      val params = parametersWithTypes.map { case (expr, typ) => Parameter(expr.parameterName, typ) }.toList
-        //      val c = CaseClassType(name.asParamName, params, None)
-        //      Some(c)
-        //      //throw new Exception(s"Could not determine element type for list: elements ${exprs} with types $elementTypes")
-        //    }
-        //  }
-        //
-        //  override def parserString(implicit ruleMap: Map[String, Rule]): String = {
-        //    s"(${exprs.map(e => s"(${e.parserString})").mkString(" ~ ")})"
-        //  }
-        //}
+        case IgnoreCaseLiteral(s: String) =>
+          s"""IgnoreCase("$s")"""
+
+        case Rep(rep, min, maybeMax) =>
+          val minParserString = if (min > 0) Some(s"min = $min") else None
+          val maxParserString = maybeMax.map(m => s"max = $m")
+          val repArgs = List(minParserString, maxParserString).flatten.mkString(", ")
+          if (repArgs == "") {
+            s"(${rep.parserString}).rep"
+          } else {
+            s"(${rep.parserString}).rep($repArgs)"
+          }
+
+        case RepSep(rep, sep, min, maybeMax) =>
+          val sepString = Some(s"sep = (${sep.parserString})")
+          val minParserString = if (min > 0) Some(s"min = $min") else None
+          val maxParserString = maybeMax.map(m => s"max = $m")
+          val repArgs = List(sepString, minParserString, maxParserString).flatten.mkString(", ")
+          s"(${rep.parserString}).rep($repArgs)"
+
+        case Maybe(inner) =>
+          s"(${inner.parserString}).?"
+
+        case Either(alternatives) =>
+          s"(${alternatives.map(a => s"(${a.parserString})").mkString(" | ")})"
+
+        case Sequence(elements) =>
+          s"(${elements.map(e => s"(${e.parserString})").mkString(" ~ ")})"
+
         case _ => ""
       }
+
+      //      expr.semanticContent match {
+      //        case r: Rule =>
+      //      }
+      if (!expr.isInstanceOf[Rule]) { // && expr.semanticContent.isDefined) {
+        s"$s.!"
+      } else {
+        s
+      }
+
+//      } else {
+//        s
+//      }
     }
 
     def parentTraits: List[String] = {
       expr match {
         case Rule(name, _, _, _) => RuleRef(name).parentTraits
         case _ =>
-          rules.values.flatMap { rule =>
-            val rt = rule.returnType
-            rt match {
-              case _: TraitType =>
-                val content = rule.definition.semanticContent
-                content match {
-                  case Some(e) if expr != RuleRef(rule.name) && expr == e => Some(rule.name)
-                  case Some(Either(exprs)) if exprs.contains(expr) => Some(rule.name)
-                  case _ => None
-                }
-              case _ => None
-            }
+          rules.values.flatMap {
+            rule =>
+              val rt = rule.returnType
+              rt match {
+                case _: TraitType =>
+                  val content = rule.definition.semanticContent
+                  content match {
+                    case Some(e) if expr != RuleRef(rule.name) && expr == e => Some(rule.name)
+                    case Some(Either(exprs)) if exprs.contains(expr) => Some(rule.name)
+                    case _ => None
+                  }
+                case _ => None
+              }
           }.toList
       }
     }
@@ -157,7 +144,8 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
           case Rule(name, lexer, inline, definition) =>
             if (lexer) {
               definition.semanticContent.map(_ => RuleRef(name))
-            } else {
+            }
+            else {
               Some(RuleRef(name))
             }
           case RuleRef(refName) => rules(refName).semanticContent
@@ -165,7 +153,8 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
           case cni: CharNotIn => Some(cni)
           case ci: CharIn => Some(ci)
           case f: Fragment => Some(f)
-          case i@IgnoreCaseLiteral(l) =>
+          case i
+            @IgnoreCaseLiteral(l) =>
             if (returnKeywordLiterals && keywords.contains(l.toUpperCase)) {
               Some(i)
             } else {
@@ -183,7 +172,7 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
           case Maybe(e) =>
             val contentWithoutLiterals = e.semanticContent
             contentWithoutLiterals match {
-              case None => e.semanticContent(returnKeywordLiterals = true).map(Maybe(_))
+              case None => e.semanticContent.map(Maybe(_)) //(returnKeywordLiterals = true)
               case Some(c) => Some(Maybe(c))
             }
           case Either(elements) =>
@@ -194,7 +183,7 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
               case many => Some(Either(many))
             }
           case Sequence(elements) =>
-            val filtered = elements.flatMap(_.semanticContent(returnKeywordLiterals = true))
+            val filtered = elements.flatMap(_.semanticContent) //(returnKeywordLiterals = true)
             filtered match {
               case Seq() => None
               case Seq(first, r@RepSep(repeated, _, 0, _)) if first == repeated =>
@@ -260,7 +249,11 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
         case Sequence(Seq(IgnoreCaseLiteral(keyword), r: RuleRef)) =>
           val innerType = r.returnType
 
-          innerType.withParameterName(s"${keyword.toLowerCase}${innerType.nameAsParameter.firstCharToUpperCase}")
+          innerType.withParameterName(s"${
+            keyword.toLowerCase
+          }${
+            innerType.nameAsParameter.firstCharToUpperCase
+          }")
         case Sequence(parameters) =>
           TupleType(parameters.map(_.returnType))
         case r: Repeat => ListType(r.expr.returnType)

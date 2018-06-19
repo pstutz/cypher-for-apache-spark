@@ -17,14 +17,13 @@ object AstGenerator extends App {
     println(r.definition.semanticContent.map(_.pretty))
     println
     println(r.parserString)
-    //println(r.returnType)
     println()
     println(r.returnType.typeSignature)
     val parseMethod = s"def parser: P[${r.returnType.typeSignature}] = P { ${r.parserString} }"
     r.returnType.scalaClassDef(r.parentTraits, List(parseMethod)).foreach(println)
     println("\n============================================================\n")
   }
-  
+
 }
 
 class ScalaTypeHelper(rules: Map[String, Rule]) {
@@ -53,12 +52,12 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
 
         case RuleRef(refName) =>
           s"$refName.parser"
-//          val r = rules(refName)
-//          val signature = r.returnType
-//          signature match {
-//            case StringType(_) => s"${r.definition.parserString}"
-//            case _ => s"$refName.parser"
-//          }
+        //          val r = rules(refName)
+        //          val signature = r.returnType
+        //          signature match {
+        //            case StringType(_) => s"${r.definition.parserString}"
+        //            case _ => s"$refName.parser"
+        //          }
 
         case StringLiteral(s) => s""""$s""""
 
@@ -101,35 +100,45 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
       //      expr.semanticContent match {
       //        case r: Rule =>
       //      }
-      if (!expr.isInstanceOf[Rule]) { // && expr.semanticContent.isDefined) {
+      if (!expr.isInstanceOf[Rule] && expr.semanticContent.isDefined) {
         s"$s.!"
       } else {
         s
       }
 
-//      } else {
-//        s
-//      }
+      //      } else {
+      //        s
+      //      }
     }
 
     def parentTraits: List[String] = {
-      expr match {
-        case Rule(name, _, _, _) => RuleRef(name).parentTraits
-        case _ =>
-          rules.values.flatMap {
-            rule =>
-              val rt = rule.returnType
-              rt match {
-                case _: TraitType =>
-                  val content = rule.definition.semanticContent
-                  content match {
-                    case Some(e) if expr != RuleRef(rule.name) && expr == e => Some(rule.name)
-                    case Some(Either(exprs)) if exprs.contains(expr) => Some(rule.name)
+      if (cachedParentTraits.contains(expr)) {
+        cachedParentTraits(expr)
+      } else {
+        val pt = expr match {
+          case Rule(name, _, _, _) => RuleRef(name).parentTraits
+          case _ =>
+            rules.values.flatMap {
+              rule =>
+//                if (!expr.isInstanceOf[RuleRef] || expr.asInstanceOf[RuleRef].ruleName != rule.name) {
+                  val rt = rule.returnType
+                  rt match {
+                    case _: TraitType =>
+                      val content = rule.definition.semanticContent
+                      content match {
+                        case Some(e) if expr != RuleRef(rule.name) && expr == e => Some(rule.name)
+                        case Some(Either(exprs)) if exprs.contains(expr) => Some(rule.name)
+                        case _ => None
+                      }
                     case _ => None
                   }
-                case _ => None
-              }
-          }.toList
+//                } else {
+//                  None
+//                }
+            }.toList
+        }
+        cachedParentTraits += expr -> pt
+        pt
       }
     }
 
@@ -153,13 +162,12 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
           case cni: CharNotIn => Some(cni)
           case ci: CharIn => Some(ci)
           case f: Fragment => Some(f)
-          case i
-            @IgnoreCaseLiteral(l) =>
-            if (returnKeywordLiterals && keywords.contains(l.toUpperCase)) {
-              Some(i)
-            } else {
-              None
-            }
+          case i@IgnoreCaseLiteral(l) =>
+            //            if (returnKeywordLiterals && keywords.contains(l.toUpperCase)) {
+            Some(i)
+          //            } else {
+          //              None
+          //            }
           case r: Rep =>
             val maybeContent = r.expr.semanticContent
             maybeContent.map(c => r.copy(expr = c))
@@ -202,79 +210,96 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
     }
 
     def returnType: ScalaType = {
-      expr match {
-        case Rule(name, inline, lexer, definition) =>
-          val paramName = name.asParamName
-          if (lexer && inline) {
-            StringType(Some(paramName))
-          } else if (lexer) {
-            CaseClassType(name, List(StringType(Some("value"))), Some(paramName))
-          } else {
-            val semanticContent = definition.semanticContent
-            semanticContent match {
-              case None => StringType(Some(paramName))
-              case Some(content) => content match {
-                case RuleRef(refName) =>
-                  CaseClassType(name, List(rules(refName).returnType), Some(paramName))
-                case Either(_) =>
-                  TraitType(name)
-                case Sequence(parameters) =>
-                  CaseClassType(name, parameters.map(_.returnType))
-                case r: Repeat =>
-                  val tp = r.returnType
-                  if (inline) {
-                    //tp
-                    CaseClassType(name, List(tp))
-                  } else {
-                    CaseClassType(name, List(tp))
-                  }
-                case m: Maybe =>
-                  val tp = m.returnType.withParameterName(s"maybe$name")
-                  if (inline) {
-                    tp
-                  } else {
-                    CaseClassType(name, List(tp), Some(paramName))
-                  }
-                case i: IgnoreCaseLiteral => i.returnType
-                case other =>
-                  println(s"TODO:")
-                  expr.show()
-                  StringType(Some(paramName))
+      if (cachedReturnTypes.contains(expr)) {
+        cachedReturnTypes(expr)
+      } else {
+        val rt = expr match {
+          case r@Rule(name, inline, lexer, definition) =>
+            val paramName = name.asParamName
+            if (lexer && inline) {
+              StringType(Some(paramName))
+//              if (r.parentTraits.isEmpty) {
+//                StringType(Some(paramName))
+//              } else {
+//                CaseClassType(name, List(StringType(Some("value"))), Some(paramName))
+//              }
+            } else if (lexer) {
+              StringType(Some(paramName))
+//              if (r.parentTraits.isEmpty) {
+//                StringType(Some(paramName))
+//              } else {
+//                CaseClassType(name, List(StringType(Some("value"))), Some(paramName))
+//              }
+            } else {
+              val semanticContent = definition.semanticContent
+              semanticContent match {
+                case None => StringType(Some(paramName))
+                case Some(content) => content match {
+                  case RuleRef(refName) =>
+                    CaseClassType(name, List(rules(refName).returnType), Some(paramName))
+                  case Either(_) =>
+                    TraitType(name)
+                  case Sequence(parameters) =>
+                    CaseClassType(name, parameters.map(_.returnType))
+                  case r: Repeat =>
+                    val tp = r.returnType
+                    if (inline) {
+                      //tp
+                      CaseClassType(name, List(tp))
+                    } else {
+                      CaseClassType(name, List(tp))
+                    }
+                  case m: Maybe =>
+                    val tp = m.returnType.withParameterName(s"maybe$name")
+                    if (inline) {
+                      tp
+                    } else {
+                      CaseClassType(name, List(tp), Some(paramName))
+                    }
+                  case i: IgnoreCaseLiteral => i.returnType
+                  case other =>
+                    println(s"TODO:")
+                    expr.show()
+                    StringType(Some(paramName))
+                }
               }
             }
-          }
-        //          }
-        case RuleRef(refName) => rules(refName).returnType
-        case Either(exprs) => TraitType(s"AnonymousTrait") //${exprs.mkString("Or")
-        case Sequence(Seq(IgnoreCaseLiteral(keyword), r: RuleRef)) =>
-          val innerType = r.returnType
+          //          }
+          case RuleRef(refName) => rules(refName).returnType
+          case Either(exprs) => TraitType(s"AnonymousTrait") //${exprs.mkString("Or")
+          case Sequence(Seq(IgnoreCaseLiteral(keyword), r: RuleRef)) =>
+            val innerType = r.returnType
 
-          innerType.withParameterName(s"${
-            keyword.toLowerCase
-          }${
-            innerType.nameAsParameter.firstCharToUpperCase
-          }")
-        case Sequence(parameters) =>
-          TupleType(parameters.map(_.returnType))
-        case r: Repeat => ListType(r.expr.returnType)
-        case Maybe(parameter) =>
-          val inner = parameter.returnType
-          inner match {
-            case b: BooleanType => b
-            case _ => OptionType(inner)
-          }
-        case _: Fragment =>
-          StringType()
-        case IgnoreCaseLiteral(l) =>
-          BooleanType(Some(l.toLowerCase))
-        case _ =>
-          println(s"TODO: $expr")
-          StringType()
+            innerType.withParameterName(s"${
+              keyword.toLowerCase
+            }${
+              innerType.nameAsParameter.firstCharToUpperCase
+            }")
+          case Sequence(parameters) =>
+            TupleType(parameters.map(_.returnType))
+          case r: Repeat => ListType(r.expr.returnType)
+          case Maybe(parameter) =>
+            val inner = parameter.returnType
+            inner match {
+              case b: BooleanType => b
+              case _ => OptionType(inner)
+            }
+          case _: Fragment =>
+            StringType()
+          case IgnoreCaseLiteral(l) =>
+            BooleanType(Some(l.toLowerCase))
+          case _ =>
+            println(s"TODO: $expr")
+            StringType()
+        }
+        cachedReturnTypes += expr -> rt
+        rt
       }
     }
   }
 
-
+  private var cachedParentTraits: Map[GrammarExpr, List[String]] = Map.empty
+  private var cachedReturnTypes: Map[GrammarExpr, ScalaType] = Map.empty
   private var cachedSemanticContent: Map[(GrammarExpr, Boolean), Option[TermExpr]] = Map.empty
 
 }

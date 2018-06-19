@@ -5,7 +5,7 @@ import fastparse.all._
 object Example extends App {
   println(ZeroDigit.parser.parse("1"))
   println(ZeroDigit.parser.parse("0"))
-  println(ExponentDecimalReal.parser.parse("hello"))
+  println(ExponentDecimalReal.parser.log("ExponentDecimalReal").parse("hello"))
   println(ExponentDecimalReal.parser.parse("310E-30"))
 }
 

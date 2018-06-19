@@ -16,6 +16,17 @@ trait ScalaType {
   def withParameterName(parameterName: String): ScalaType
 }
 
+case object UnitType extends ScalaType {
+  override def name: String = "Unit"
+
+  override def nameAsParameter: String = "unit"
+
+  override def typeSignature: String = name
+
+  // TODO: Ignored
+  override def withParameterName(parameterName: String): ScalaType = this
+}
+
 case class StringType(maybeNameAsParameter: Option[String] = None) extends ScalaType {
   override def name: String = "String"
 

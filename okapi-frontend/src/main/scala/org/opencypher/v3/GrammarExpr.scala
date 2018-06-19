@@ -18,11 +18,11 @@ case class StringLiteral(s: String) extends Literal
 
 case class CharNotIn(chars: String) extends Literal
 
-case class CharIn(chars: String) extends Literal
+case class CharIn(chars: String, meaningful: Boolean) extends Literal
 
 case class Fragment(ps: Set[Int], namedInclusions: Set[String], namedExclusions: Set[String]) extends Literal
 
-case class IgnoreCaseLiteral(s: String) extends Literal
+case class IgnoreCaseLiteral(s: String, meaningful: Boolean) extends Literal
 
 abstract class Repeat extends TermExpr {
   def expr: GrammarExpr

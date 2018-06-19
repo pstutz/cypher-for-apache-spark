@@ -1,13 +1,15 @@
 package org.opencypher.v3
 
 import org.opencypher.grammar.CharacterSet.DefinitionVisitor.NamedSetVisitor
-import org.opencypher.grammar.CharacterSet.ExclusionVisitor
+import org.opencypher.grammar.CharacterSet.{DefinitionVisitor, ExclusionVisitor}
 import org.opencypher.grammar.Grammar.Term
-import org.opencypher.grammar.{Alternatives, CharacterSet, NonTerminal, Optional, Production, Repetition, Sequence => OcSequence, TermVisitor, Literal => OcLiteral}
+import org.opencypher.grammar.{Alternatives, CharacterSet, CodePointSet, NonTerminal, Optional, Production, Repetition, TermVisitor, Literal => OcLiteral, Sequence => OcSequence}
+import org.opencypher.v3.GrammarVisitors.syntaxChars
 
 import scala.collection.JavaConverters._
 
 object GrammarVisitors {
+
   implicit class RichProduction(p: Production) {
     def convert: Rule = {
       Rule(p.name, p.inline, p.lexer, p.definition.convert)
@@ -67,26 +69,36 @@ object GrammarVisitors {
       def convert: TermExpr = {
         case class CharacterSetBuilder() extends NamedSetVisitor[RuntimeException] with ExclusionVisitor[RuntimeException] {
 
-          def result: Fragment = {
-            Fragment(codePoints -- exclusions, namedInclusions, namedExclusions)
+          def result: CharIn = {
+            //Fragment(codePoints -- exclusions, namedInclusions, namedExclusions)
+            val unicodeChars = (codePoints -- exclusions).map(codePoint => Character.toString(codePoint.toChar)).mkString
+            val meaningful = if (unicodeChars.length == 1) {
+              !syntaxChars.contains(unicodeChars.charAt(0))
+            } else true
+            CharIn(unicodeChars, meaningful)
           }
 
           var codePoints = Set.empty[Int]
           var exclusions = Set.empty[Int]
-          var namedInclusions: Set[String] = Set.empty
-          var namedExclusions: Set[String] = Set.empty
 
           override def visitCodePoint(cp: Int): Unit = codePoints += cp
 
           override def excludeCodePoint(cp: Int): Unit = exclusions -= cp
 
           override def visitSet(name: String): ExclusionVisitor[RuntimeException] = {
-            namedInclusions += name
+//            val setEnum: CharacterSet.Unicode = CharacterSet.Unicode.valueOf(name)
+//            val setEnum = CharacterSet.Unicode.Zs
+
+//            println(setEnum.getClass.getName)
+//            println(setEnum.getClass.getFields.map(_.getName).mkString(", "))//.filter(_.contains("set")
             this
           }
 
           override def excludeSet(name: String): Unit = {
-            namedExclusions += name
+//            val setEnum: CharacterSet.Unicode = CharacterSet.Unicode.valueOf(name)
+//            println(setEnum.getClass.getMethods.map(_.getName).filter(_.contains("set")).mkString(", "))
+
+              //.set.setName(result)
           }
         }
 
@@ -99,10 +111,51 @@ object GrammarVisitors {
 
   }
 
+  val syntaxChars = Set(
+    ',',
+    '[',
+    ':',
+    '|',
+    '*',
+    ']',
+    '.',
+    '^',
+    '$',
+    '(',
+    ')',
+    ';',
+    '"',
+    '=',
+    '{',
+    '}',
+    '`'
+  )
+
+  val meaningfulKeywords = Set(
+    "DISTINCT"
+  )
+
   implicit class RichLiteral(l: OcLiteral) {
     def convert: Literal = {
-      if (l.caseSensitive) StringLiteral(l.toString) else IgnoreCaseLiteral(l.toString)
+      val s = l.toString
+      if (l.caseSensitive) {
+        if (l.length == 1) {
+          val meaningful = !syntaxChars.contains(l.charAt(0))
+          CharIn(s, meaningful)
+        } else {
+          StringLiteral(s)
+        }
+      } else {
+        if (l.length == 1) {
+          val meaningful = !syntaxChars.contains(l.charAt(0))
+          CharIn((s.toLowerCase + s.toUpperCase).distinct.toString, meaningful)
+        } else {
+          val meaningful = meaningfulKeywords.contains(s)
+          IgnoreCaseLiteral(s, meaningful)
+        }
+      }
     }
   }
+
 }
 

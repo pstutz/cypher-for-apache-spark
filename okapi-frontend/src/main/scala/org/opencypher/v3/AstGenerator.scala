@@ -1,11 +1,30 @@
 package org.opencypher.v3
 
+import org.opencypher.okapi.trees.BottomUp
+
 import scala.collection.immutable.Set
 import scala.language.higherKinds
+import TypeMatchingUtilities._
 
 object AstGenerator extends App {
 
-  val rules: Map[String, Rule] = CypherGrammar.parserRules()
+  val initialRules: Map[String, Rule] = CypherGrammar.parserRules()
+
+  val rewriteCharIn = BottomUp[GrammarExpr] {
+    case Either(exprs) =>
+      val (charIn, others) = exprs.partition {
+        case _: CharIn => true
+        case _ => false
+      }
+      val aggregatedCharIn = CharIn(charIn.as[CharIn].map(_.chars).mkString, true)
+      if (others.isEmpty) {
+        aggregatedCharIn
+      } else {
+        Either(aggregatedCharIn :: others)
+      }
+  }
+
+  val rules = initialRules.mapValues(r => r.copy(definition = rewriteCharIn.rewrite(r.definition)))
   implicit val helper = new ScalaTypeHelper(rules)
 
   import helper._
@@ -62,9 +81,9 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
 
         case StringLiteral(s) => s""""$s""""
 
-//        case Fragment(ps, _, _) => // TODO: Handle named sets
-//          val unicodeChars = ps.map(codePoint => Character.toString(codePoint.toChar)).mkString
-//          s"""CharIn("$unicodeChars")"""
+        //        case Fragment(ps, _, _) => // TODO: Handle named sets
+        //          val unicodeChars = ps.map(codePoint => Character.toString(codePoint.toChar)).mkString
+        //          s"""CharIn("$unicodeChars")"""
 
         case CharIn(cs, _) =>
           s"""CharIn("$cs")"""

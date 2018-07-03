@@ -181,32 +181,21 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
       .symbol
       .typeSignature
       .members
-      .toList
       .collect { case a: TermSymbol => a }
       .filterNot(_.isLazy)
       .filterNot(_.isMethod)
       .filterNot(_.isModule)
       .filterNot(_.isClass)
+      .toList
       .map(currentMirror.reflect(this).reflectField)
       .map(termSymbol => termSymbol -> termSymbol.get)
       .filter { case (termSymbol, value) =>
+        def containsChildren: Boolean = termSymbol.symbol.typeSignature.typeArgs.head <:< typeOf[T]
         value match {
-          case c: T if containsChild(c) => false // Don't print children
-          case _: Option[_] =>
-            val innerType = termSymbol.symbol.typeSignature.typeArgs.head
-            if (innerType <:< typeOf[T]) {
-              false // Don't print children
-            } else {
-              true
-            }
-          case _: Iterable[_] =>
-            val innerType = termSymbol.symbol.typeSignature.typeArgs.head
-            if (innerType <:< typeOf[T]) {
-              false // Don't print children
-            } else {
-              true
-            }
-          case _: Array[T] => false // Don't print children
+          case c: T if containsChild(c) => false
+          case _: Option[_] if containsChildren => false
+          case _: Iterable[_] if containsChildren => false
+          case _: Array[_] if containsChildren => false
           case _ => true
         }
       }

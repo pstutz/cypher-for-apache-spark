@@ -193,15 +193,15 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
         value match {
           case c: T if containsChild(c) => false // Don't print children
           case _: Option[_] =>
-            val innerType = termSymbol.symbol.typeSignature.typeArgs.head.typeSymbol
-            if (innerType == typeOf[T].typeSymbol) {
+            val innerType = termSymbol.symbol.typeSignature.typeArgs.head
+            if (innerType <:< typeOf[T]) {
               false // Don't print children
             } else {
               true
             }
           case _: Iterable[_] =>
-            val innerType = termSymbol.symbol.typeSignature.typeArgs.head.typeSymbol
-            if (innerType == typeOf[T].typeSymbol) {
+            val innerType = termSymbol.symbol.typeSignature.typeArgs.head
+            if (innerType <:< typeOf[T]) {
               false // Don't print children
             } else {
               true

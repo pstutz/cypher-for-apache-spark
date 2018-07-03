@@ -1,14 +1,13 @@
 package org.opencypher
 
-import org.antlr.v4.runtime.tree.{ParseTree, RuleNode, TerminalNode}
+import org.antlr.v4.runtime.tree.{RuleNode, TerminalNode}
 import org.antlr.v4.runtime.{CharStreams, CommonTokenStream, ParserRuleContext}
 import org.opencypher.okapi.trees.AbstractTreeNode
-import org.opencypher.parser.CypherParser.OC_MultiplyDivideModuloExpressionContext
+import org.opencypher.parser.CypherParser.OC_PropertyOrLabelsExpressionContext
 import org.opencypher.parser.{CypherBaseVisitor, CypherLexer, CypherParser}
-import sun.reflect.generics.reflectiveObjects.NotImplementedException
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
+import scala.language.implicitConversions
 
 object Test extends App {
 
@@ -28,7 +27,7 @@ object Test extends App {
   val parser = new CypherParser(tokens)
   val tree = parser.oC_Cypher
   val ast = TestVisitor.visit(tree)
-  //ast.show
+  ast.show
 }
 
 abstract class CypherAst extends AbstractTreeNode[CypherAst]
@@ -45,14 +44,17 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
 
   implicit class RichJavaList[E](val list: java.util.List[E]) extends AnyVal {
 
-    def map[T <: CypherAst](f: E => T): List[T] = {
+    def map[T](f: E => T): List[T] = {
       list.asScala.toList.map(f(_))
     }
 
+    def fold[T](initial: T)(f: (T, E) => T): T = {
+      list.asScala.toList.foldLeft(initial)(f)
+    }
+
     def terminals(s: String): List[String] = {
-      list.asScala.toList.flatMap {
-        case t: TerminalNode if s.contains(t.getSymbol.getText) => Some(t.getSymbol.getText)
-        case _ => None
+      list.asScala.toList.collect {
+        case t: TerminalNode if s.contains(t.getSymbol.getText) => t.getSymbol.getText
       }
     }
 
@@ -71,7 +73,7 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
     }
   }
 
-  def visitEither[P](either: RuleNode): P = {
+  def visitAlternatives[P](either: RuleNode): P = {
     var result: P = null.asInstanceOf[P]
     val n = either.getChildCount
     var i = 0
@@ -104,23 +106,30 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   }
 
   override def visitOC_Query(ctx: CypherParser.OC_QueryContext): Query = {
-    visitEither[Query](ctx)
+    visitAlternatives[Query](ctx)
   }
 
-  override def visitOC_RegularQuery(ctx: CypherParser.OC_RegularQueryContext): RegularQuery = {
-    RegularQuery(visitOC_SingleQuery(ctx.oC_SingleQuery), ctx.oC_Union.map(visitOC_Union))
+  override def visitOC_RegularQuery(ctx: CypherParser.OC_RegularQueryContext): Query = {
+    val single: Query = visitOC_SingleQuery(ctx.oC_SingleQuery)
+    if (ctx.oC_Union.isEmpty) {
+      single
+    } else {
+      ctx.oC_Union
+        .map[(Boolean, Query)] { sqc =>
+        (sqc.ALL: Boolean) -> visitOC_SingleQuery(sqc.oC_SingleQuery)
+      }
+        .foldLeft(single) { case (current: Query, (all, next)) =>
+          Union(all, current, next)
+        }
+    }
   }
 
-  override def visitOC_SingleQuery(ctx: CypherParser.OC_SingleQueryContext): SingleQuery = {
-    visitEither[SingleQuery](ctx)
+  override def visitOC_SingleQuery(ctx: CypherParser.OC_SingleQueryContext): Query = {
+    visitAlternatives[Query](ctx)
   }
 
-  override def visitOC_Union(ctx: CypherParser.OC_UnionContext): Union = {
-    Union(ctx.ALL, visitOC_SingleQuery(ctx.oC_SingleQuery))
-  }
-
-  override def visitOC_SinglePartQuery(ctx: CypherParser.OC_SinglePartQueryContext): SinglePartQuery = {
-    visitEither(ctx).asInstanceOf[SinglePartQuery]
+  override def visitOC_SinglePartQuery(ctx: CypherParser.OC_SinglePartQueryContext): Query = {
+    visitAlternatives[Query](ctx)
   }
 
   override def visitOC_ReadOnlyEnd(ctx: CypherParser.OC_ReadOnlyEndContext): ReadOnlyEnd = {
@@ -132,7 +141,7 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   }
 
   override def visitOC_ReadingClause(ctx: CypherParser.OC_ReadingClauseContext): ReadingClause = {
-    visitEither(ctx).asInstanceOf[ReadingClause]
+    visitAlternatives(ctx).asInstanceOf[ReadingClause]
   }
 
   override def visitOC_Return(ctx: CypherParser.OC_ReturnContext): Return = {
@@ -140,6 +149,7 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   }
 
   override def visitOC_ReturnBody(ctx: CypherParser.OC_ReturnBodyContext): ReturnBody = {
+    // TODO: Reenable
     //ReturnBody(visitOC_ReturnItems(ctx.oC_ReturnItems), Option(visitOC_Order(ctx.oC_Order)), Option(visitOC_Skip(ctx.oC_Skip)), Option(visitOC_Limit(ctx.oC_Limit)))
     ReturnBody(visitOC_ReturnItems(ctx.oC_ReturnItems), None, None, None)
   }
@@ -202,7 +212,7 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   override def visitOC_ComparisonExpression(ctx: CypherParser.OC_ComparisonExpressionContext): Expression = {
     val expr = visitOC_AddOrSubtractExpression(ctx.oC_AddOrSubtractExpression)
     val comparisonExprs = ctx.oC_PartialComparisonExpression.asScala.toList
-    comparisonExprs.foldLeft(expr: Expression) { case (left, partialComparisonExpr) =>
+    comparisonExprs.foldLeft(expr) { case (left, partialComparisonExpr) =>
       val op = partialComparisonExpr.children.terminals("<=<>>=").head
       val right = visitOC_AddOrSubtractExpression(partialComparisonExpr.oC_AddOrSubtractExpression)
       op match {
@@ -216,11 +226,11 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
     }
   }
 
-  override def visitOC_AddOrSubtractExpression(ctx: CypherParser.OC_AddOrSubtractExpressionContext): AddOrSubtractExpression = {
+  override def visitOC_AddOrSubtractExpression(ctx: CypherParser.OC_AddOrSubtractExpressionContext): Expression = {
     val exprs = ctx.oC_MultiplyDivideModuloExpression.map(visitOC_MultiplyDivideModuloExpression)
     val ops = ctx.children.terminals("+-")
     val opsWithExpr = ops zip exprs.tail
-    opsWithExpr.foldLeft(exprs.head: AddOrSubtractExpression) { case (left, (op, right)) =>
+    opsWithExpr.foldLeft(exprs.head) { case (left, (op, right)) =>
       op match {
         case "+" => AddExpression(left, right)
         case "-" => SubtractExpression(left, right)
@@ -229,8 +239,78 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
     }
   }
 
-  override def visitOC_MultiplyDivideModuloExpression(ctx: CypherParser.OC_MultiplyDivideModuloExpressionContext): MultiplyDivideModuloExpression = {
-    ???
+  override def visitOC_MultiplyDivideModuloExpression(ctx: CypherParser.OC_MultiplyDivideModuloExpressionContext): Expression = {
+    val exprs = ctx.oC_PowerOfExpression.map(visitOC_PowerOfExpression)
+    val ops = ctx.children.terminals("*/%")
+    val opsWithExpr = ops zip exprs.tail
+    opsWithExpr.foldLeft(exprs.head) { case (left, (op, right)) =>
+      op match {
+        case "*" => MultiplyExpression(left, right)
+        case "/" => DivideExpression(left, right)
+        case "%" => ModuloExpression(left, right)
+        case _ => throw new IllegalArgumentException("Unbalanced MultiplyDivideModuloExpression")
+      }
+    }
+  }
+
+  override def visitOC_PowerOfExpression(ctx: CypherParser.OC_PowerOfExpressionContext): Expression = {
+    val exprs = ctx.oC_UnaryAddOrSubtractExpression.map(visitOC_UnaryAddOrSubtractExpression)
+    val ops = ctx.children.terminals("^")
+    val opsWithExpr = ops zip exprs.tail
+    opsWithExpr.foldLeft(exprs.head) { case (left, (op, right)) =>
+      op match {
+        case "*" => MultiplyExpression(left, right)
+        case "/" => DivideExpression(left, right)
+        case "%" => ModuloExpression(left, right)
+        case _ => throw new IllegalArgumentException("Unbalanced MultiplyDivideModuloExpression")
+      }
+    }
+  }
+
+  override def visitOC_UnaryAddOrSubtractExpression(ctx: CypherParser.OC_UnaryAddOrSubtractExpressionContext): Expression = {
+    val expr = visitOC_StringListNullOperatorExpression(ctx.oC_StringListNullOperatorExpression)
+    val ops = ctx.children.terminals("-")
+    if (ops.size % 2 != 0) {
+      UnarySubtractExpression(expr)
+    } else {
+      expr
+    }
+  }
+
+  override def visitOC_StringListNullOperatorExpression(ctx: CypherParser.OC_StringListNullOperatorExpressionContext): Expression = {
+    val firstChild = ctx.children.get(0)
+    firstChild match {
+      case pl: OC_PropertyOrLabelsExpressionContext => visitOC_PropertyOrLabelsExpression(pl)
+      // TODO: implement other alternatives
+      case _ => throw new UnsupportedOperationException(s"StringListNullOperatorExpression alternative starting with ${firstChild.getClass.getSimpleName}")
+    }
+  }
+
+  override def visitOC_PropertyOrLabelsExpression(ctx: CypherParser.OC_PropertyOrLabelsExpressionContext): Expression = {
+    // TODO: implement property lookup
+    if (ctx.oC_NodeLabels() != null || (ctx.oC_PropertyLookup != null && ctx.oC_PropertyLookup.size > 0)) {
+      throw new UnsupportedOperationException(s"Property lookup and label expression")
+    }
+    visitOC_Atom(ctx.oC_Atom)
+  }
+
+  override def visitOC_Atom(ctx: CypherParser.OC_AtomContext): Atom = {
+    // TODO: implement missing alternatives
+    visitAlternatives[Atom](ctx)
+  }
+
+  override def visitOC_Literal(ctx: CypherParser.OC_LiteralContext): Literal = {
+    // TODO: implement missing alternatives
+    visitAlternatives[Literal](ctx)
+  }
+
+  override def visitOC_NumberLiteral(ctx: CypherParser.OC_NumberLiteralContext): NumberLiteral = {
+    // TODO: implement missing alternatives
+    visitAlternatives[NumberLiteral](ctx)
+  }
+
+  override def visitOC_IntegerLiteral(ctx: CypherParser.OC_IntegerLiteralContext): IntegerLiteral = {
+    IntegerLiteral(ctx.getText.toLong)
   }
 
   //  override def visitOC_Match(ctx: CypherParser.OC_MatchContext): Match = {
@@ -238,8 +318,8 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  }
 
   override def visitChildren(node: RuleNode): CypherAst = {
-    println(node.getRuleContext.getClass.getSimpleName)
-    //throw new RuntimeException(s"Not implemented: ${node.getRuleContext.getClass.getSimpleName.dropRight(7)}")
+    //println(node.getRuleContext.getClass.getSimpleName)
+    throw new RuntimeException(s"Not implemented: ${node.getRuleContext.getClass.getSimpleName.dropRight(7)}")
     null.asInstanceOf[CypherAst]
   }
 
@@ -265,9 +345,6 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  }
   //  override def visitOC_RelationshipDetail(ctx: CypherParser.OC_RelationshipDetailContext): RelationshipDetail = {
   //    RelationshipDetail(ctx.getText, (visitOC_SP(ctx.oC_SP)).?, (visitOC_Variable(ctx.oC_Variable), (visitOC_SP(ctx.oC_SP)).?).?, (visitOC_RelationshipTypes(ctx.oC_RelationshipTypes), (visitOC_SP(ctx.oC_SP)).?).?, (visitOC_RangeLiteral(ctx.oC_RangeLiteral)).?, (visitOC_Properties(ctx.oC_Properties), (visitOC_SP(ctx.oC_SP)).?).?, ctx.getText)
-  //  }
-  //  override def visitOC_Atom(ctx: CypherParser.OC_AtomContext): Atom = {
-  //    visitChildren(ctx).asInstanceOf[Atom]
   //  }
   //  override def visitOC_HexInteger(ctx: CypherParser.OC_HexIntegerContext): String = {
   //    HexInteger("ctx.getText", (visitOC_HexDigit(ctx.oC_HexDigit)).rep(min = 1))
@@ -295,9 +372,6 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  }
   //  override def visitOC_Pattern(ctx: CypherParser.OC_PatternContext): Pattern = {
   //    Pattern(visitOC_PatternPart(ctx.oC_PatternPart), ((visitOC_SP(ctx.oC_SP)).?, ctx.getText, (visitOC_SP(ctx.oC_SP)).?, visitOC_PatternPart(ctx.oC_PatternPart)).rep)
-  //  }
-  //  override def visitOC_PropertyOrLabelsExpression(ctx: CypherParser.OC_PropertyOrLabelsExpressionContext): PropertyOrLabelsExpression = {
-  //    PropertyOrLabelsExpression(visitOC_Atom(ctx.oC_Atom), ((visitOC_SP(ctx.oC_SP)).?, visitOC_PropertyLookup(ctx.oC_PropertyLookup)).rep, ((visitOC_SP(ctx.oC_SP)).?, visitOC_NodeLabels(ctx.oC_NodeLabels)).?)
   //  }
   //  override def visitOC_PatternElementChain(ctx: CypherParser.OC_PatternElementChainContext): PatternElementChain = {
   //    PatternElementChain(visitOC_RelationshipPattern(ctx.oC_RelationshipPattern), (visitOC_SP(ctx.oC_SP)).?, visitOC_NodePattern(ctx.oC_NodePattern))
@@ -344,9 +418,6 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  override def visitOC_StringLiteral(ctx: CypherParser.OC_StringLiteralContext): String = {
   //    StringLiteral(((ctx.getText) | (ctx.getText, (((ctx.getText) | (visitOC_EscapedChar(ctx.oC_EscapedChar)))).rep, ctx.getText) | (ctx.getText, (((ctx.getText) | (visitOC_EscapedChar(ctx.oC_EscapedChar)))).rep, ctx.getText)))
   //  }
-  //  override def visitOC_Literal(ctx: CypherParser.OC_LiteralContext): Literal = {
-  //    visitChildren(ctx).asInstanceOf[Literal]
-  //  }
   //  override def visitOC_FunctionName(ctx: CypherParser.OC_FunctionNameContext): FunctionName = {
   //    visitChildren(ctx).asInstanceOf[FunctionName]
   //  }
@@ -362,9 +433,6 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  override def visitOC_NodeLabels(ctx: CypherParser.OC_NodeLabelsContext): NodeLabels = {
   //    NodeLabels(visitOC_NodeLabel(ctx.oC_NodeLabel), ((visitOC_SP(ctx.oC_SP)).?, visitOC_NodeLabel(ctx.oC_NodeLabel)).rep)
   //  }
-  //  override def visitOC_NumberLiteral(ctx: CypherParser.OC_NumberLiteralContext): NumberLiteral = {
-  //    visitChildren(ctx).asInstanceOf[NumberLiteral]
-  //  }
   //  override def visitOC_FilterExpression(ctx: CypherParser.OC_FilterExpressionContext): FilterExpression = {
   //    FilterExpression(visitOC_IdInColl(ctx.oC_IdInColl), ((visitOC_SP(ctx.oC_SP)).?, visitOC_Where(ctx.oC_Where)).?)
   //  }
@@ -377,14 +445,8 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  override def visitOC_AnonymousPatternPart(ctx: CypherParser.OC_AnonymousPatternPartContext): AnonymousPatternPart = {
   //    visitChildren(ctx).asInstanceOf[AnonymousPatternPart]
   //  }
-  //  override def visitOC_StringListNullOperatorExpression(ctx: CypherParser.OC_StringListNullOperatorExpressionContext): StringListNullOperatorExpression = {
-  //    StringListNullOperatorExpression(visitOC_PropertyOrLabelsExpression(ctx.oC_PropertyOrLabelsExpression), (((ctx.getText) | ((visitOC_SP(ctx.oC_SP)).?, ctx.getText, visitOC_Expression(ctx.oC_Expression), ctx.getText) | ((visitOC_SP(ctx.oC_SP)).?, ctx.getText, (visitOC_Expression(ctx.oC_Expression)).?, ctx.getText, (visitOC_Expression(ctx.oC_Expression)).?, ctx.getText) | (((ctx.getText) | (visitOC_SP(ctx.oC_SP), ctx.getText) | (visitOC_SP(ctx.oC_SP), ctx.getText, visitOC_SP(ctx.oC_SP), ctx.getText) | (visitOC_SP(ctx.oC_SP), ctx.getText, visitOC_SP(ctx.oC_SP), ctx.getText) | (visitOC_SP(ctx.oC_SP), ctx.getText)), (visitOC_SP(ctx.oC_SP)).?, visitOC_PropertyOrLabelsExpression(ctx.oC_PropertyOrLabelsExpression)) | (visitOC_SP(ctx.oC_SP), ctx.getText, visitOC_SP(ctx.oC_SP), ctx.getText) | (visitOC_SP(ctx.oC_SP), ctx.getText, visitOC_SP(ctx.oC_SP), ctx.getText, visitOC_SP(ctx.oC_SP), ctx.getText))).rep)
-  //  }
   //  override def visitOC_YieldItem(ctx: CypherParser.OC_YieldItemContext): YieldItem = {
   //    YieldItem((visitOC_ProcedureResultField(ctx.oC_ProcedureResultField), visitOC_SP(ctx.oC_SP), ctx.getText, visitOC_SP(ctx.oC_SP)).?, visitOC_Variable(ctx.oC_Variable))
-  //  }
-  //  override def visitOC_PowerOfExpression(ctx: CypherParser.OC_PowerOfExpressionContext): PowerOfExpression = {
-  //    PowerOfExpression(visitOC_UnaryAddOrSubtractExpression(ctx.oC_UnaryAddOrSubtractExpression), ((visitOC_SP(ctx.oC_SP)).?, ctx.getText, (visitOC_SP(ctx.oC_SP)).?, visitOC_UnaryAddOrSubtractExpression(ctx.oC_UnaryAddOrSubtractExpression)).rep)
   //  }
   //  override def visitOC_SetItem(ctx: CypherParser.OC_SetItemContext): SetItem = {
   //    visitChildren(ctx).asInstanceOf[SetItem]
@@ -425,9 +487,6 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  override def visitOC_RangeLiteral(ctx: CypherParser.OC_RangeLiteralContext): RangeLiteral = {
   //    RangeLiteral(ctx.getText, (visitOC_SP(ctx.oC_SP)).?, (visitOC_IntegerLiteral(ctx.oC_IntegerLiteral), (visitOC_SP(ctx.oC_SP)).?).?, (ctx.getText, (visitOC_SP(ctx.oC_SP)).?, (visitOC_IntegerLiteral(ctx.oC_IntegerLiteral), (visitOC_SP(ctx.oC_SP)).?).?).?)
   //  }
-  //  override def visitOC_UnaryAddOrSubtractExpression(ctx: CypherParser.OC_UnaryAddOrSubtractExpressionContext): UnaryAddOrSubtractExpression = {
-  //    UnaryAddOrSubtractExpression((ctx.getText, (visitOC_SP(ctx.oC_SP)).?).rep, visitOC_StringListNullOperatorExpression(ctx.oC_StringListNullOperatorExpression))
-  //  }
   //  override def visitOC_NonZeroOctDigit(ctx: CypherParser.OC_NonZeroOctDigitContext): String = {
   //    NonZeroOctDigit(ctx.getText)
   //  }
@@ -436,9 +495,6 @@ case object TestVisitor extends CypherBaseVisitor[CypherAst] {
   //  }
   //  override def visitOC_PatternPart(ctx: CypherParser.OC_PatternPartContext): PatternPart = {
   //    visitChildren(ctx).asInstanceOf[PatternPart]
-  //  }
-  //  override def visitOC_IntegerLiteral(ctx: CypherParser.OC_IntegerLiteralContext): IntegerLiteral = {
-  //    visitChildren(ctx).asInstanceOf[IntegerLiteral]
   //  }
   //  override def visitOC_LeftArrowHead(ctx: CypherParser.OC_LeftArrowHeadContext): String = {
   //    LeftArrowHead(ctx.getText)
@@ -562,37 +618,51 @@ trait AnonymousTrait
 
 case class Cypher(statement: Statement) extends CypherAst
 
+trait Query extends CypherAst with Statement
+
+case class Union(all: Boolean, left: Query, right: Query) extends Query
+
+case class ReadOnlyEnd(readPart: ReadPart, returnClause: Return) extends Query
+
+case class ReadUpdateEnd(readingClause: ReadingClause, readingClauses: List[ReadingClause], updatingClauses: List[UpdatingClause], maybeReturn: Option[Return]) extends Query
+
+case class UpdatingEnd(updatingStartClause: UpdatingStartClause, updatingClauses: List[UpdatingClause], maybeReturn: Option[Return]) extends Query
+
+case class MultiPartQuery(anonymousTrait: AnonymousTrait, withClause: With, tuple3s: List[(ReadPart, UpdatingPart, With)], singlePartQuery: Query) extends Query
+
+case class StandaloneCall(anonymousTrait: AnonymousTrait, maybeYieldItems: Option[YieldItems]) extends Query
+
 trait Expression extends CypherAst with ReturnItem
 
-case class OrExpression(expressions: List[Expression]) extends CypherAst with Expression
+case class OrExpression(expressions: List[Expression]) extends Expression
 
-case class XorExpression(expressions: List[Expression]) extends CypherAst with Expression
+case class XorExpression(expressions: List[Expression]) extends Expression
 
-case class AndExpression(expressions: List[Expression]) extends CypherAst with Expression
+case class AndExpression(expressions: List[Expression]) extends Expression
 
-case class NotExpression(expression: Expression) extends CypherAst with Expression
+case class NotExpression(expression: Expression) extends Expression
 
-trait ComparisonExpression extends CypherAst with Expression
+case class EqualExpression(left: Expression, right: Expression) extends Expression
 
-case class EqualExpression(left: Expression, right: Expression) extends CypherAst with ComparisonExpression
+case class LessThanExpression(left: Expression, right: Expression) extends Expression
 
-case class LessThanExpression(left: Expression, right: Expression) extends CypherAst with ComparisonExpression
+case class LessThanOrEqualExpression(left: Expression, right: Expression) extends Expression
 
-case class LessThanOrEqualExpression(left: Expression, right: Expression) extends CypherAst with ComparisonExpression
+case class AddExpression(left: Expression, right: Expression) extends Expression
 
-case class AddExpression(left: Expression, right: Expression) extends CypherAst with AddOrSubtractExpression
+case class SubtractExpression(left: Expression, right: Expression) extends Expression
 
-case class SubtractExpression(left: Expression, right: Expression) extends CypherAst with AddOrSubtractExpression
+case class MultiplyExpression(left: Expression, right: Expression) extends Expression
 
-trait AddOrSubtractExpression extends CypherAst with Expression
+case class DivideExpression(left: Expression, right: Expression) extends Expression
 
-case class MultiplyDivideModuloExpression(powerOfExpression: PowerOfExpression, stuff: List[Nothing]) extends CypherAst with Expression with AddOrSubtractExpression
+case class ModuloExpression(left: Expression, right: Expression) extends Expression
 
-case class PowerOfExpression(unaryAddOrSubtractExpressions: List[UnaryAddOrSubtractExpression]) extends CypherAst
+case class PowerOfExpression(expressions: List[Expression]) extends Expression
 
-case class UnaryAddOrSubtractExpression(strings: List[String], stringListNullOperatorExpression: StringListNullOperatorExpression) extends CypherAst
+case class UnarySubtractExpression(expression: Expression) extends Expression
 
-case class StringListNullOperatorExpression(propertyOrLabelsExpression: PropertyOrLabelsExpression, anonymousTraits: List[AnonymousTrait]) extends CypherAst
+case class StringListNullOperatorExpression(propertyOrLabelsExpression: PropertyOrLabelsExpression, anonymousTraits: List[AnonymousTrait]) extends Expression
 
 trait Properties extends CypherAst
 
@@ -606,7 +676,7 @@ case class RelationshipDetail(
   maybeRangeLiteral: Option[RangeLiteral],
   maybeProperties: Option[Properties]) extends CypherAst {
 
-  override val children = (maybeVariable ++ maybeRelationshipTypes ++ maybeRangeLiteral ++ maybeProperties).toArray
+  override val children: Array[CypherAst] = (maybeVariable ++ maybeRelationshipTypes ++ maybeRangeLiteral ++ maybeProperties).toArray
 
   override def withNewChildren(newChildren: Array[CypherAst]): CypherAst = {
     val v = newChildren.collectFirst { case v: Variable => v }
@@ -618,7 +688,7 @@ case class RelationshipDetail(
 
 }
 
-trait Atom extends CypherAst
+trait Atom extends Expression
 
 case class Return(distinct: Boolean, returnBody: ReturnBody) extends CypherAst
 
@@ -628,7 +698,7 @@ trait RelationshipPattern extends CypherAst
 
 case class With(distinct: Boolean, returnBody: ReturnBody, maybeWhere: Option[Where]) extends CypherAst {
 
-  override val children = (returnBody ++ maybeWhere).toArray
+  override val children: Array[CypherAst] = (returnBody ++ maybeWhere).toArray
 
   override def withNewChildren(newChildren: Array[CypherAst]): CypherAst = {
     copy(distinct, newChildren(0).asInstanceOf[ReturnBody], if (newChildren.size == 2) Some(newChildren(1).asInstanceOf[Where]) else None)
@@ -648,7 +718,7 @@ case class Pattern(patternParts: List[PatternPart]) extends CypherAst
 
 case class PropertyOrLabelsExpression(atom: Atom, propertyLookups: List[PropertyLookup], maybeNodeLabels: Option[NodeLabels]) extends CypherAst {
 
-  override val children = ((atom +: propertyLookups) ++ maybeNodeLabels).toArray
+  override val children: Array[CypherAst] = ((atom +: propertyLookups) ++ maybeNodeLabels).toArray
 
   override def withNewChildren(newChildren: Array[CypherAst]): CypherAst = {
     copy(newChildren(0).asInstanceOf[Atom], newChildren.collect { case p: PropertyLookup => p }.toList, if (newChildren.size == 3) Some(newChildren(2).asInstanceOf[NodeLabels]) else None)
@@ -658,13 +728,9 @@ case class PropertyOrLabelsExpression(atom: Atom, propertyLookups: List[Property
 
 case class PatternElementChain(relationshipPattern: RelationshipPattern, nodePattern: NodePattern) extends CypherAst
 
-case class ReadOnlyEnd(readPart: ReadPart, returnClause: Return) extends CypherAst with SinglePartQuery
-
-trait SinglePartQuery extends CypherAst with SingleQuery
-
 case class NodePattern(maybeVariable: Option[Variable], maybeNodeLabels: Option[NodeLabels], maybeProperties: Option[Properties]) extends CypherAst {
 
-  override val children = (maybeVariable ++ maybeNodeLabels ++ maybeProperties).toArray
+  override val children: Array[CypherAst] = (maybeVariable ++ maybeNodeLabels ++ maybeProperties).toArray
 
   override def withNewChildren(newChildren: Array[CypherAst]): CypherAst = {
     val v = newChildren.collectFirst { case v: Variable => v }
@@ -680,8 +746,6 @@ case class Variable(name: String) extends CypherAst with Atom
 case class NodeLabel(labelName: LabelName) extends CypherAst
 
 case class SymbolicName(value: String) extends CypherAst with Parameter with FunctionName with SchemaName
-
-case class MultiPartQuery(anonymousTrait: AnonymousTrait, withClause: With, tuple3s: List[(ReadPart, UpdatingPart, With)], singlePartQuery: SinglePartQuery) extends CypherAst with SingleQuery
 
 trait ReservedWord extends CypherAst with SchemaName
 
@@ -713,8 +777,6 @@ trait UpdatingStartClause extends CypherAst
 
 trait AnonymousPatternPart extends CypherAst with PatternPart
 
-trait SingleQuery extends CypherAst
-
 case class YieldItem(maybeProcedureResultField: Option[ProcedureResultField], variable: Variable) extends CypherAst
 
 trait SetItem extends CypherAst
@@ -723,21 +785,15 @@ case class ProcedureName(namespace: Namespace, symbolicName: SymbolicName) exten
 
 trait RemoveItem extends CypherAst
 
-trait Query extends CypherAst with Statement
-
 trait MergeAction extends CypherAst
 
 case class LabelName(schemaName: SchemaName) extends CypherAst
-
-case class ReadUpdateEnd(readingClause: ReadingClause, readingClauses: List[ReadingClause], updatingClauses: List[UpdatingClause], maybeReturn: Option[Return]) extends CypherAst with SinglePartQuery
 
 case class ImplicitProcedureInvocation(procedureName: ProcedureName) extends CypherAst
 
 case class Where(expression: Expression) extends CypherAst
 
 trait ReturnItem extends CypherAst
-
-case class UpdatingEnd(updatingStartClause: UpdatingStartClause, updatingClauses: List[UpdatingClause], maybeReturn: Option[Return]) extends CypherAst with SinglePartQuery
 
 case class Delete(expressions: List[Expression]) extends CypherAst with UpdatingClause
 
@@ -747,7 +803,7 @@ case class RelationshipsPattern(nodePattern: NodePattern, patternElementChains: 
 
 trait PatternPart extends CypherAst
 
-trait IntegerLiteral extends CypherAst with NumberLiteral
+case class IntegerLiteral(value: Long) extends CypherAst with NumberLiteral
 
 trait Statement extends CypherAst
 
@@ -775,17 +831,24 @@ trait YieldItems extends CypherAst
 
 case class FunctionInvocation(functionName: FunctionName, distinct: Boolean, maybeExpressions: Option[List[Expression]]) extends CypherAst with Atom
 
-case class ReturnBody(returnItems: ReturnItems, maybeOrder: Option[Order], maybeSkip: Option[Skip], maybeLimit: Option[Limit]) extends CypherAst
+case class ReturnBody(returnItems: ReturnItems, maybeOrder: Option[Order], maybeSkip: Option[Skip], maybeLimit: Option[Limit]) extends CypherAst {
+
+  override val children: Array[CypherAst] = (Vector(returnItems) ++ maybeOrder ++ maybeSkip ++ maybeLimit).toArray
+
+  override def withNewChildren(newChildren: Array[CypherAst]): CypherAst = {
+    val o = newChildren.collectFirst { case o: Order => o }
+    val s = newChildren.collectFirst { case s: Skip => s }
+    val l = newChildren.collectFirst { case l: Limit => l }
+    copy(newChildren(0).asInstanceOf[ReturnItems], o, s, l)
+  }
+
+}
 
 case class Order(sortItems: List[SortItem]) extends CypherAst
 
 case class Unwind(expression: Expression, variable: Variable) extends CypherAst with ReadingClause
 
-case class Union(all: Boolean, singleQuery: SingleQuery) extends CypherAst
-
 case class IdInColl(variable: Variable, expression: Expression) extends CypherAst
-
-case class StandaloneCall(anonymousTrait: AnonymousTrait, maybeYieldItems: Option[YieldItems]) extends CypherAst with Query
 
 case class CaseExpression(anonymousTrait: AnonymousTrait, maybeExpression: Option[Expression]) extends CypherAst with Atom
 
@@ -804,7 +867,5 @@ case class Skip(expression: Expression) extends CypherAst
 case class ListComprehension(filterExpression: FilterExpression, maybeExpression: Option[Expression]) extends CypherAst with Atom
 
 case class Merge(patternPart: PatternPart, mergeActions: List[MergeAction]) extends CypherAst with UpdatingStartClause with UpdatingClause
-
-case class RegularQuery(singleQuery: SingleQuery, unions: List[Union]) extends CypherAst with Query
 
 case class PropertyKeyName(schemaName: SchemaName) extends CypherAst with PropertyLookup

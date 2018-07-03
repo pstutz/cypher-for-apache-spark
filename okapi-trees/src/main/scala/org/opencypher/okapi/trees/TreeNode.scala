@@ -182,10 +182,8 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
       .typeSignature
       .members
       .collect { case a: TermSymbol => a }
-      .filterNot(_.isLazy)
+      .filter(_.isCaseAccessor)
       .filterNot(_.isMethod)
-      .filterNot(_.isModule)
-      .filterNot(_.isClass)
       .toList
       .map(currentMirror.reflect(this).reflectField)
       .map(termSymbol => termSymbol -> termSymbol.get)

@@ -1,4 +1,4 @@
-package org.opencypher.v3
+package antlr.visitor
 
 object StringUtilities {
 

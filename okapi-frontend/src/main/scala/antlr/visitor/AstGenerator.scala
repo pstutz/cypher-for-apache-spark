@@ -1,10 +1,10 @@
-package org.opencypher.v3
+package antlr.visitor
 
+import antlr.visitor.TypeMatchingUtilities._
 import org.opencypher.okapi.trees.BottomUp
 
 import scala.collection.immutable.Set
 import scala.language.higherKinds
-import TypeMatchingUtilities._
 
 object AstGenerator extends App {
 
@@ -30,17 +30,26 @@ object AstGenerator extends App {
   import helper._
 
   rules.values.foreach { r =>
-    println("\n============================================================\n")
-    r.show()
-    println
-    println(r.definition.semanticContent.map(_.pretty))
-    println
-    println(r.parserString)
-    println()
-    println(r.returnType.typeSignature)
-    val parseMethod = s"def parser: P[${r.returnType.typeSignature}] = P { ${r.parserString} }"
-    r.returnType.scalaClassDef(r.parentTraits, List(parseMethod)).foreach(println)
-    println("\n============================================================\n")
+    //println("\n============================================================\n")
+
+    //    r.show()
+    //    println
+    //    println(r.definition.semanticContent.map(_.pretty))
+    //    println
+    //    println(r.parserString)
+    //    println()
+    //    println(r.returnType.typeSignature)
+    val parseMethod =
+      s"""|  override def visitOC_${r.name}(ctx: CypherParser.OC_${r.name}Context): ${r.returnType.typeSignature} = {
+          |    ${r.parserString}
+          |  } """.stripMargin
+
+    println(parseMethod)
+
+    //    r.returnType.scalaClassDef(r.parentTraits, List(parseMethod)).foreach(println)
+    //println("\n============================================================\n")
+    //r.returnType.scalaClassDef("CypherAst" :: r.parentTraits, List()).foreach(println)
+
   }
 
 }
@@ -60,18 +69,12 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
         case r@Rule(name, _, _, definition) =>
           val st = r.returnType
           st match {
-            case TraitType(_, _) => s"${definition.parserString}"
-            case _ =>
-              val maybeMultipleParams = definition.semanticContent
-              maybeMultipleParams match {
-                case Some(Sequence(_)) =>
-                  s"(${definition.parserString}).map($name)"
-                case _ => s"${definition.parserString}.map(p => $name(p))"
-              }
+            case TraitType(_, _) => s"visitChildren(ctx).asInstanceOf[$name]"
+            case _ => s"$name(${definition.parserString})"
           }
 
         case RuleRef(refName) =>
-          s"$refName.parser"
+          s"visitOC_$refName(ctx.oC_$refName())"
         //          val r = rules(refName)
         //          val signature = r.returnType
         //          signature match {
@@ -79,17 +82,17 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
         //            case _ => s"$refName.parser"
         //          }
 
-        case StringLiteral(s) => s""""$s""""
+        case StringLiteral(s) => s""""ctx.getText""""
 
         //        case Fragment(ps, _, _) => // TODO: Handle named sets
         //          val unicodeChars = ps.map(codePoint => Character.toString(codePoint.toChar)).mkString
         //          s"""CharIn("$unicodeChars")"""
 
         case CharIn(cs, _) =>
-          s"""CharIn("$cs")"""
+          s"""ctx.getText"""
 
         case IgnoreCaseLiteral(s, _) =>
-          s"""IgnoreCase("$s")"""
+          s"""ctx.getText"""
 
         case Rep(rep, min, maybeMax) =>
           val minParserString = if (min > 0) Some(s"min = $min") else None
@@ -115,7 +118,7 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
           s"(${alternatives.map(a => s"(${a.parserString})").mkString(" | ")})"
 
         case Sequence(elements) =>
-          s"(${elements.map(e => s"(${e.parserString})").mkString(" ~ ")})"
+          s"${elements.map(e => s"${e.parserString}").mkString(", ")}"
 
         case other => s"TODO parserString $other"
       }
@@ -123,11 +126,7 @@ class ScalaTypeHelper(rules: Map[String, Rule]) {
       //      expr.semanticContent match {
       //        case r: Rule =>
       //      }
-      if (!expr.isInstanceOf[Rule] && expr.semanticContent.isDefined) {
-        s"$s.!"
-      } else {
-        s
-      }
+      s
 
       //      } else {
       //        s

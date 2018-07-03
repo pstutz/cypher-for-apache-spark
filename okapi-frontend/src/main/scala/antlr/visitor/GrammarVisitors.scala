@@ -1,10 +1,9 @@
-package org.opencypher.v3
+package antlr.visitor
 
 import org.opencypher.grammar.CharacterSet.DefinitionVisitor.NamedSetVisitor
-import org.opencypher.grammar.CharacterSet.{DefinitionVisitor, ExclusionVisitor}
+import org.opencypher.grammar.CharacterSet.ExclusionVisitor
 import org.opencypher.grammar.Grammar.Term
-import org.opencypher.grammar.{Alternatives, CharacterSet, CodePointSet, NonTerminal, Optional, Production, Repetition, TermVisitor, Literal => OcLiteral, Sequence => OcSequence}
-import org.opencypher.v3.GrammarVisitors.syntaxChars
+import org.opencypher.grammar.{Alternatives, CharacterSet, NonTerminal, Optional, Production, Repetition, TermVisitor, Literal => OcLiteral, Sequence => OcSequence}
 
 import scala.collection.JavaConverters._
 

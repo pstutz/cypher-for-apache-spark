@@ -76,6 +76,7 @@
     <dep.spark.version>2.2.1</dep.spark.version>
     <dep.spark.scope>compile</dep.spark.scope>
     <dep.upickle.version>0.6.6</dep.upickle.version>
+    <dep.antlr4.version>4.7.1</dep.antlr4.version>
     <dep.fastparse.version>1.0.0</dep.fastparse.version>
 
     <!-- Test scope dependencies -->

@@ -1,8 +1,8 @@
-package org.opencypher.v3
+package antlr.visitor
 
 import java.io.File
 
-import org.opencypher.v3.GrammarVisitors._
+import antlr.visitor.GrammarVisitors._
 import org.opencypher.grammar.{Grammar, Production, ProductionVisitor}
 
 object CypherGrammar {

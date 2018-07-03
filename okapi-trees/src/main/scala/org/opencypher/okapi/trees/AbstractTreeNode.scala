@@ -27,6 +27,7 @@
 package org.opencypher.okapi.trees
 
 import scala.reflect.ClassTag
+import reflect.runtime.universe._
 
 /**
   * Class that implements the `children` and `withNewChildren` methods using reflection when implementing
@@ -45,8 +46,10 @@ import scala.reflect.ClassTag
   *   - There can be at most one list of children and there can be no normal child constructor parameters
   *     that appear after the list of children. This allows to call `withNewChildren` with a different number of
   *     children than the original node had and vary the length of the list to accommodate.
+  *
+  * Options and empty lists are supported with custom `children`/`withNewChildren` implementations.
   */
-abstract class AbstractTreeNode[T <: AbstractTreeNode[T]: ClassTag] extends TreeNode[T] {
+abstract class AbstractTreeNode[T <: AbstractTreeNode[T]: ClassTag : TypeTag] extends TreeNode[T] {
   self: T =>
 
   override val children: Array[T] = {

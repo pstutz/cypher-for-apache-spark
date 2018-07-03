@@ -30,6 +30,8 @@ import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 import scala.util.hashing.MurmurHash3
+import reflect.runtime.universe._
+import reflect.runtime.{currentMirror, universe}
 
 /**
   * This is the basic tree node class. Usually it makes more sense to use `AbstractTreeNode`, which uses reflection
@@ -40,7 +42,7 @@ import scala.util.hashing.MurmurHash3
   * This class uses array operations instead of Scala collections, both for improved performance as well as to save
   * stack frames during recursion, which allows it to operate on trees that are several thousand nodes high.
   */
-abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Traversable[T] {
+abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product with Traversable[T] {
   self: T =>
 
   def withNewChildren(newChildren: Array[T]): T
@@ -75,7 +77,7 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     result
   }
 
-  def map[O <: TreeNode[O]: ClassTag](f: T => O): O = {
+  def map[O <: TreeNode[O] : ClassTag](f: T => O): O = {
     val childrenLength = children.length
     if (childrenLength == 0) {
       f(self)
@@ -175,17 +177,41 @@ abstract class TreeNode[T <: TreeNode[T]: ClassTag] extends Product with Travers
     * Arguments that should be printed. The default implementation excludes children.
     */
   def args: Iterator[Any] = {
-    def generalCase(arg: Any) = Some(arg.toString)
-    productIterator.flatMap {
-      case c: T if containsChild(c)     => None // Don't print children
-      case i: Iterable[_] if i.nonEmpty =>
-        // Need explicit pattern match for T, as `isInstanceOf` in `if` results in a warning.
-        i.head match {
-          case _: T => None // Don't print children
-          case _    => generalCase(i)
+    currentMirror.reflect(this)
+      .symbol
+      .typeSignature
+      .members
+      .toList
+      .collect { case a: TermSymbol => a }
+      .filterNot(_.isLazy)
+      .filterNot(_.isMethod)
+      .filterNot(_.isModule)
+      .filterNot(_.isClass)
+      .map(currentMirror.reflect(this).reflectField)
+      .map(termSymbol => termSymbol -> termSymbol.get)
+      .filter { case (termSymbol, value) =>
+        value match {
+          case c: T if containsChild(c) => false // Don't print children
+          case _: Option[_] =>
+            val innerType = termSymbol.symbol.typeSignature.typeArgs.head.typeSymbol
+            if (innerType == typeOf[T].typeSymbol) {
+              false // Don't print children
+            } else {
+              true
+            }
+          case _: Iterable[_] =>
+            val innerType = termSymbol.symbol.typeSignature.typeArgs.head.typeSymbol
+            if (innerType == typeOf[T].typeSymbol) {
+              false // Don't print children
+            } else {
+              true
+            }
+          case _: Array[T] => false // Don't print children
+          case _ => true
         }
-      case other => generalCase(other)
-    }
+      }
+      .map { case (termSymbol, value) => s"${termSymbol.symbol.name.toString.trim}=$value" }
+      .reverseIterator
   }
 
   override def toString = s"${getClass.getSimpleName}${if (argString.isEmpty) "" else s"($argString)"}"

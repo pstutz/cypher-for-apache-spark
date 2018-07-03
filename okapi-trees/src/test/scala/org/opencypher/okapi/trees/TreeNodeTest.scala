@@ -84,7 +84,6 @@ class TreeNodeTest extends FunSpec with Matchers {
 
     // - if any children are contained in a list at all, then all list elements need to be children
     intercept[InvalidConstructorArgument] {
-      case class Unsupported(elems: List[Object]) extends AbstractTreeNode[Unsupported]
       val fail = Unsupported(List(Unsupported(List.empty), "2"))
     }.getMessage should equal(
       s"""Expected a list that contains either no children or only children
@@ -94,17 +93,11 @@ class TreeNodeTest extends FunSpec with Matchers {
 
     // - there can be at most one list of children
     intercept[IllegalArgumentException] {
-      abstract class UnsupportedTree extends AbstractTreeNode[UnsupportedTree]
-      case object UnsupportedLeaf extends UnsupportedTree
-      case class UnsupportedNode(elems1: List[UnsupportedTree], elems2: List[UnsupportedTree]) extends UnsupportedTree
       UnsupportedNode(List(UnsupportedLeaf), List(UnsupportedLeaf))
     }.getMessage should equal("requirement failed: there can be at most one list of children in the constructor.")
 
     // - there can be no normal child constructor parameters after the list of children
     intercept[IllegalArgumentException] {
-      abstract class UnsupportedTree2 extends AbstractTreeNode[UnsupportedTree2]
-      case object UnsupportedLeaf2 extends UnsupportedTree2
-      case class UnsupportedNode2(elems: List[UnsupportedTree2], elem: UnsupportedTree2) extends UnsupportedTree2
       UnsupportedNode2(List(UnsupportedLeaf2), UnsupportedLeaf2)
     }.getMessage should equal(
       "requirement failed: there can be no normal child constructor parameters " +
@@ -145,12 +138,16 @@ class TreeNodeTest extends FunSpec with Matchers {
   }
 
   it("arg string") {
-    Number(12).argString should equal("12")
+    Number(12).argString should equal("v=12")
     Add(Number(1), Number(2)).argString should equal("")
   }
 
+  it("option and list arg string") {
+    Dummy(None, List.empty, None, List.empty).argString should equal("print1=None, print2=List()")
+  }
+
   it("to string") {
-    Number(12).toString should equal("Number(12)")
+    Number(12).toString should equal("Number(v=12)")
     Add(Number(1), Number(2)).toString should equal("Add")
   }
 
@@ -159,19 +156,33 @@ class TreeNodeTest extends FunSpec with Matchers {
     t.pretty should equal(
       """|╙──Add
          |    ╟──Add
-         |    ║   ╟──Number(4)
-         |    ║   ╙──Number(3)
+         |    ║   ╟──Number(v=4)
+         |    ║   ╙──Number(v=3)
          |    ╙──Add
-         |        ╟──Number(4)
-         |        ╙──Number(3)""".stripMargin)
+         |        ╟──Number(v=4)
+         |        ╙──Number(v=3)""".stripMargin)
   }
 
   it("copy with the same children returns the same instance") {
     calculation.withNewChildren(Array(calculation.left, calculation.right)) should be theSameInstanceAs calculation
   }
 
+  case class Unsupported(elems: List[Object]) extends AbstractTreeNode[Unsupported]
+
+  abstract class UnsupportedTree extends AbstractTreeNode[UnsupportedTree]
+  case object UnsupportedLeaf extends UnsupportedTree
+  case class UnsupportedNode(elems1: List[UnsupportedTree], elems2: List[UnsupportedTree]) extends UnsupportedTree
+
+  abstract class UnsupportedTree2 extends AbstractTreeNode[UnsupportedTree2]
+  case object UnsupportedLeaf2 extends UnsupportedTree2
+  case class UnsupportedNode2(elems: List[UnsupportedTree2], elem: UnsupportedTree2) extends UnsupportedTree2
+
   abstract class CalcExpr extends AbstractTreeNode[CalcExpr] {
     def eval: Int
+  }
+
+  case class Dummy(print1: Option[String], print2: List[String], dontPrint1: Option[CalcExpr], dontPrint2: List[CalcExpr]) extends CalcExpr {
+    def eval = 0
   }
 
   case class AddList(dummy1: List[Int], first: CalcExpr, dummy2: Int, remaining: List[CalcExpr], dummy3: List[Object])

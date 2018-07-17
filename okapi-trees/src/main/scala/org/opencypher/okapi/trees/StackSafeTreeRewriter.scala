@@ -39,9 +39,8 @@ case class BottomUpStackSafe[T <: TreeNode[T] : ClassTag](rule: PartialFunction[
         stackSafeRewrite(updatedStack)
       case NonEmptyList(Done(nodes), tail) =>
         tail match {
-          case Nil =>
-            assert(nodes.size == 1)
-            nodes.head
+          case Nil => nodes.headOption.getOrElse(throw new IllegalStateException(
+            s"Invalid rewrite produced $nodes instead of a single final rewritten tree root."))
           case Done(nextNodes) :: nextTail =>
             stackSafeRewrite(NonEmptyList(Done(nodes ::: nextNodes), nextTail))
           case RewriteChildren(nextNode, rewrittenChildren) :: nextTail =>

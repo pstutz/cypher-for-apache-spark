@@ -29,9 +29,9 @@ package org.opencypher.okapi.trees
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
+import scala.reflect.runtime.currentMirror
+import scala.reflect.runtime.universe._
 import scala.util.hashing.MurmurHash3
-import reflect.runtime.universe._
-import reflect.runtime.{currentMirror, universe}
 
 /**
   * This is the basic tree node class. Usually it makes more sense to use `AbstractTreeNode`, which uses reflection
@@ -56,14 +56,21 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
   def isLeaf: Boolean = height == 1
 
   def height: Int = {
-    val childrenLength = children.length
-    var i = 0
-    var result = 0
-    while (i < childrenLength) {
-      result = math.max(result, children(i).height)
-      i += 1
+    try {
+      val childrenLength = children.length
+      var i = 0
+      var result = 0
+      while (i < childrenLength) {
+        result = math.max(result, children(i).height)
+        i += 1
+      }
+      result + 1
+    } catch {
+      case _: StackOverflowError =>
+        TransformBottomUpStackSafe[T, Int] { case (_, transformedChildren) =>
+          (0 :: transformedChildren).max + 1
+        }.rewrite(self)
     }
-    result + 1
   }
 
   override def size: Int = {

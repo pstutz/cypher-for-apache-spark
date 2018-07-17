@@ -153,21 +153,21 @@ class TreeNodeTest extends FunSpec with Matchers {
   }
 
   it("support arbitrarily high high trees with stack safe rewrites") {
-    val highTree = (1 to 50000).foldLeft(Number(1): CalcExpr) {
+    val height = 50000
+    val highTree = (1 to height).foldLeft(Number(1): CalcExpr) {
       case (t, n) => Add(t, Number(n))
     }
     val simplified = BottomUpStackSafe[CalcExpr] {
       case Add(Number(n1), Number(n2)) => Number(n1 + n2)
     }.rewrite(highTree)
-    //simplified should equal(Number(500501))
 
-    //    val addNoOpsBeforeLeftAdd: PartialFunction[CalcExpr, CalcExpr] = {
-    //      case Add(a: Add, b) => Add(NoOp(a), b)
-    //    }
-    //    val noOpTree = TopDown[CalcExpr] {
-    //      addNoOpsBeforeLeftAdd
-    //    }.rewrite(highTree)
-    //    noOpTree.height should equal(50000)
+    val addNoOpsBeforeLeftAdd: PartialFunction[CalcExpr, CalcExpr] = {
+      case Add(a: Add, b) => Add(NoOp(a), b)
+    }
+    val noOpTree = TopDownStackSafe[CalcExpr] {
+      addNoOpsBeforeLeftAdd
+    }.rewrite(highTree)
+    noOpTree.height should equal(2 * height)
   }
 
   it("arg string") {

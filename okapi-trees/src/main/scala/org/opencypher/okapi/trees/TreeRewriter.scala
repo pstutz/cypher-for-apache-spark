@@ -29,7 +29,7 @@ package org.opencypher.okapi.trees
 import scala.reflect.ClassTag
 
 
-abstract class TreeRewriter[I <: TreeNode[I] : ClassTag, O <: TreeNode[O] : ClassTag] {
+abstract class TreeRewriter[I <: TreeNode[I] : ClassTag, O] {
   def rewrite(tree: I): O
 }
 

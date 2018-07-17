@@ -28,14 +28,16 @@ package org.opencypher.okapi.trees
 
 import scala.reflect.ClassTag
 
-abstract class TreeRewriter[I <: TreeNode[I]: ClassTag, O <: TreeNode[O]: ClassTag] {
+
+abstract class TreeRewriter[I <: TreeNode[I] : ClassTag, O <: TreeNode[O] : ClassTag] {
   def rewrite(tree: I): O
 }
+
 
 /**
   * Applies the given partial function starting from the leafs of this tree.
   */
-case class BottomUp[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
+case class BottomUp[T <: TreeNode[T] : ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
 
   def rewrite(tree: T): T = {
     val childrenLength = tree.children.length
@@ -63,7 +65,7 @@ case class BottomUp[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) ext
   *
   * @note Note the applied rule cannot insert new parent nodes.
   */
-case class TopDown[T <: TreeNode[T]: ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
+case class TopDown[T <: TreeNode[T] : ClassTag](rule: PartialFunction[T, T]) extends TreeRewriter[T, T] {
 
   def rewrite(tree: T): T = {
     val afterSelf = if (rule.isDefinedAt(tree)) rule(tree) else tree

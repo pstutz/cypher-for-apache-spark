@@ -189,6 +189,7 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
       .map(termSymbol => termSymbol -> termSymbol.get)
       .filter { case (termSymbol, value) =>
         def containsChildren: Boolean = termSymbol.symbol.typeSignature.typeArgs.head <:< typeOf[T]
+
         value match {
           case c: T if containsChild(c) => false
           case _: Option[_] if containsChildren => false
@@ -201,5 +202,7 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
       .reverseIterator
   }
 
-  override def toString = s"${getClass.getSimpleName}${if (argString.isEmpty) "" else s"($argString)"}"
+  override def toString = s"${getClass.getSimpleName}${
+    if (productIterator.isEmpty) "" else s"(${productIterator.mkString(", ")})"
+  }"
 }

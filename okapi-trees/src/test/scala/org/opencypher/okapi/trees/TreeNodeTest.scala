@@ -26,7 +26,9 @@
  */
 package org.opencypher.okapi.trees
 
-import org.scalatest.{FunSpec, FunSuite, Matchers}
+import org.scalatest.{FunSpec, Matchers}
+
+import scala.util.control.TailCalls._
 
 class TreeNodeTest extends FunSpec with Matchers {
 
@@ -137,6 +139,37 @@ class TreeNodeTest extends FunSpec with Matchers {
     noOpTree.height should equal(2000)
   }
 
+  it("stack safe rewrite") {
+    val addNoops: PartialFunction[CalcExpr, CalcExpr] = {
+      case Add(n1: Number, n2: Number) => Add(NoOp(n1), NoOp(n2))
+      case Add(n1: Number, n2) => Add(NoOp(n1), n2)
+      case Add(n1, n2: Number) => Add(n1, NoOp(n2))
+    }
+
+    val expected = Add(NoOp(Number(5)), Add(NoOp(Number(4)), NoOp(Number(3))))
+
+    val up = BottomUpStackSafe[CalcExpr](addNoops).rewrite(calculation)
+    up should equal(expected)
+  }
+
+  it("support arbitrarily high high trees with stack safe rewrites") {
+    val highTree = (1 to 50000).foldLeft(Number(1): CalcExpr) {
+      case (t, n) => Add(t, Number(n))
+    }
+    val simplified = BottomUpStackSafe[CalcExpr] {
+      case Add(Number(n1), Number(n2)) => Number(n1 + n2)
+    }.rewrite(highTree)
+    //simplified should equal(Number(500501))
+
+    //    val addNoOpsBeforeLeftAdd: PartialFunction[CalcExpr, CalcExpr] = {
+    //      case Add(a: Add, b) => Add(NoOp(a), b)
+    //    }
+    //    val noOpTree = TopDown[CalcExpr] {
+    //      addNoOpsBeforeLeftAdd
+    //    }.rewrite(highTree)
+    //    noOpTree.height should equal(50000)
+  }
+
   it("arg string") {
     Number(12).argString should equal("v=12")
     Add(Number(1), Number(2)).argString should equal("")
@@ -170,11 +203,15 @@ class TreeNodeTest extends FunSpec with Matchers {
   case class Unsupported(elems: List[Object]) extends AbstractTreeNode[Unsupported]
 
   abstract class UnsupportedTree extends AbstractTreeNode[UnsupportedTree]
+
   case object UnsupportedLeaf extends UnsupportedTree
+
   case class UnsupportedNode(elems1: List[UnsupportedTree], elems2: List[UnsupportedTree]) extends UnsupportedTree
 
   abstract class UnsupportedTree2 extends AbstractTreeNode[UnsupportedTree2]
+
   case object UnsupportedLeaf2 extends UnsupportedTree2
+
   case class UnsupportedNode2(elems: List[UnsupportedTree2], elem: UnsupportedTree2) extends UnsupportedTree2
 
   abstract class CalcExpr extends AbstractTreeNode[CalcExpr] {

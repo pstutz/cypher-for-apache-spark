@@ -64,7 +64,7 @@
     <plugin.maven-surefire.version>2.20.1</plugin.maven-surefire.version>
 
     <!-- Used dependencies -->
-    <dep.cats.version>1.0.1</dep.cats.version>
+    <dep.cats.version>1.1.0</dep.cats.version>
     <dep.eff.version>5.0.0</dep.eff.version>
     <dep.fastparse.version>1.0.0</dep.fastparse.version>
     <dep.hadoop.version>2.7.0</dep.hadoop.version>

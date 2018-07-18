@@ -45,6 +45,29 @@ import scala.util.hashing.MurmurHash3
 abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product with Traversable[T] {
   self: T =>
 
+  def rewriteTopDown(f: PartialFunction[T, T]): T = {
+    try {
+      TopDown(f).rewrite(self)
+    } catch {
+      case _: StackOverflowError =>
+        TopDownStackSafe(f).rewrite(self)
+    }
+  }
+
+  def rewrite(f: PartialFunction[T, T]): T = {
+    try {
+      BottomUp(f).rewrite(self)
+    } catch {
+      case _: StackOverflowError =>
+        BottomUpStackSafe(f).rewrite(self)
+    }
+  }
+
+  // TODO: Add fast stack version
+  def transform[O](f: (T, List[O]) => O): O = {
+    TransformStackSafe(f).rewrite(self)
+  }
+
   def withNewChildren(newChildren: Array[T]): T
 
   def children: Array[T] = Array.empty
@@ -67,9 +90,7 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
       result + 1
     } catch {
       case _: StackOverflowError =>
-        TransformBottomUpStackSafe[T, Int] { case (_, transformedChildren) =>
-          (0 :: transformedChildren).max + 1
-        }.rewrite(self)
+        TransformStackSafe[T, Int] { case (_, childHeights) => (0 :: childHeights).max + 1 }.rewrite(self)
     }
   }
 

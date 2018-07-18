@@ -45,8 +45,11 @@ case class BottomUpStackSafe[T <: TreeNode[T] : ClassTag](rule: PartialFunction[
         stackSafeRewrite(updatedStack)
       case NonEmptyList(Done(nodes), tail) =>
         tail match {
-          case Nil => nodes.headOption.getOrElse(throw new IllegalStateException(
-            s"Invalid rewrite produced $nodes instead of a single final rewritten tree root."))
+          case Nil => nodes match {
+              case result :: Nil => result
+              case invalid => throw new IllegalStateException(
+                s"Invalid rewrite produced $invalid instead of a single final rewritten tree root.")
+            }
           case Done(nextNodes) :: nextTail =>
             stackSafeRewrite(NonEmptyList(Done(nodes ::: nextNodes), nextTail))
           case RewriteChildren(nextNode, rewrittenChildren) :: nextTail =>
@@ -88,8 +91,11 @@ case class TopDownStackSafe[T <: TreeNode[T] : ClassTag](rule: PartialFunction[T
         stackSafeRewrite(updatedStack)
       case NonEmptyList(Done(nodes), tail) =>
         tail match {
-          case Nil => nodes.headOption.getOrElse(throw new IllegalStateException(
-            s"Invalid rewrite produced $nodes instead of a single final rewritten tree root."))
+          case Nil => nodes match {
+              case result :: Nil => result
+              case invalid => throw new IllegalStateException(
+                s"Invalid rewrite produced $invalid instead of a single final rewritten tree root.")
+            }
           case Done(nextNodes) :: nextTail =>
             stackSafeRewrite(NonEmptyList(Done(nodes ::: nextNodes), nextTail))
           case RewriteChildren(nextNode, rewrittenChildren) :: nextTail =>
@@ -105,7 +111,7 @@ case class TopDownStackSafe[T <: TreeNode[T] : ClassTag](rule: PartialFunction[T
 }
 
 case class TransformBottomUpStackSafe[I <: TreeNode[I] : ClassTag, O](transform: (I, List[O]) => O)
- extends TreeRewriter[I, O] {
+  extends TreeRewriter[I, O] {
 
   type Stack = NonEmptyList[TreeOperation[I, O]]
 
@@ -130,8 +136,11 @@ case class TransformBottomUpStackSafe[I <: TreeNode[I] : ClassTag, O](transform:
         stackSafeRewrite(updatedStack)
       case NonEmptyList(Done(nodes), tail) =>
         tail match {
-          case Nil => nodes.headOption.getOrElse(throw new IllegalStateException(
-            s"Invalid rewrite produced $nodes instead of a single final rewritten tree root."))
+          case Nil => nodes match {
+              case result :: Nil => result
+              case invalid => throw new IllegalStateException(
+                s"Invalid rewrite produced $invalid instead of a single final rewritten tree root.")
+            }
           case Done(nextNodes) :: nextTail =>
             stackSafeRewrite(NonEmptyList(Done(nodes ::: nextNodes), nextTail))
           case RewriteChildren(nextNode, rewrittenChildren) :: nextTail =>
@@ -174,8 +183,11 @@ case class TransformTopDownStackSafe[I <: TreeNode[I] : ClassTag, O](
         stackSafeRewrite(updatedStack)
       case NonEmptyList(Done(nodes), tail) =>
         tail match {
-          case Nil => nodes.headOption.getOrElse(throw new IllegalStateException(
-            s"Invalid transformation produced $nodes instead of a single final aggregate."))
+          case Nil => nodes match {
+            case result :: Nil => result
+            case invalid => throw new IllegalStateException(
+              s"Invalid rewrite produced $invalid instead of a single final rewritten tree root.")
+          }
           case Done(nextNodes) :: nextTail =>
             stackSafeRewrite(NonEmptyList(Done(nodes ::: nextNodes), nextTail))
           case RewriteChildren(nextNode, transformedChildren) :: nextTail =>

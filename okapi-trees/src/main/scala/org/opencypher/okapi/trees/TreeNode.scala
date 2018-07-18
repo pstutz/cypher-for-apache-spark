@@ -231,6 +231,6 @@ abstract class TreeNode[T <: TreeNode[T] : ClassTag : TypeTag] extends Product w
   }
 
   override def toString = s"${getClass.getSimpleName}${
-    if (productIterator.isEmpty) "" else s"(${productIterator.mkString(", ")})"
+    if (args.isEmpty) "" else s"(${args.mkString(", ")})"
   }"
 }

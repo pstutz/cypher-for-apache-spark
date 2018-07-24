@@ -88,3 +88,31 @@ case class TopDown[T <: TreeNode[T] : ClassTag](rule: PartialFunction[T, T]) ext
   }
 
 }
+
+/**
+  * Applies the given partial function starting from the leafs of this tree.
+  */
+case class Transform[T <: TreeNode[T] : ClassTag](
+  transform: (I, List[O]) => O
+) extends TreeRewriter[T] {
+
+  def rewrite(tree: T): T = {
+    val childrenLength = tree.children.length
+    val afterChildren = if (childrenLength == 0) {
+      tree
+    } else {
+      val updatedChildren = {
+        val childrenCopy = new Array[T](childrenLength)
+        var i = 0
+        while (i < childrenLength) {
+          childrenCopy(i) = rewrite(tree.children(i))
+          i += 1
+        }
+        childrenCopy
+      }
+      tree.withNewChildren(updatedChildren)
+    }
+    if (rule.isDefinedAt(afterChildren)) rule(afterChildren) else afterChildren
+  }
+
+}

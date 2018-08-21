@@ -65,6 +65,7 @@
     <plugin.maven-surefire.version>2.20.1</plugin.maven-surefire.version>
 
     <!-- Used dependencies -->
+    <dep.antlr4.version>4.7.1</dep.antlr4.version>
     <dep.cats.version>1.0.1</dep.cats.version>
     <dep.eff.version>5.0.0</dep.eff.version>
     <dep.fastparse.version>1.0.0</dep.fastparse.version>
@@ -374,6 +375,7 @@
         <module>okapi-testing</module>
         <module>okapi-neo4j-io</module>
         <module>okapi-neo4j-io-testing</module>
+        <module>okapi-parser</module>
         <module>okapi-ir</module>
         <module>okapi-neo4j-procedures</module>
         <module>okapi-logical</module>
@@ -434,6 +436,7 @@
         <module>okapi-testing</module>
         <module>okapi-neo4j-io</module>
         <module>okapi-neo4j-io-testing</module>
+        <module>okapi-parser</module>
         <module>okapi-ir</module>
         <module>okapi-neo4j-procedures</module>
         <module>okapi-logical</module>

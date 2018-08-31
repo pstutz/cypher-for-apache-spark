@@ -69,6 +69,12 @@
       <version>1.0.0-M10</version>
     </dependency>
 
+    <dependency>
+      <groupId>com.lihaoyi</groupId>
+      <artifactId>fastparse_${project.scala.binary.version}</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
     <!-- Workaround for https://youtrack.jetbrains.com/issue/SCL-13184 -->
     <dependency>
       <groupId>org.opencypher</groupId>

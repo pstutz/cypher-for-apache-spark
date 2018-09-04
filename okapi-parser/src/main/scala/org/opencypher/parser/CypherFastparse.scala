@@ -1,7 +1,9 @@
 package org.opencypher.parser
 
+import cats.data.NonEmptyList
 import fastparse.{WhitespaceApi, parsers}
 
+//noinspection ForwardReference
 object CypherFastparse {
 
   val White: WhitespaceApi.Wrapper = WhitespaceApi.Wrapper {
@@ -53,25 +55,37 @@ object CypherFastparse {
   import White._
   import fastparse.noApi._
 
-  object | {
-    def apply[I](i: I): I = i
+  implicit class ListParserOps[E](val p: P[Seq[E]]) extends AnyVal {
+    def toList: P[List[E]] = p.map(l => l.toList)
+    def toNonEmptyList: P[NonEmptyList[E]] = p.map(l => NonEmptyList.fromListUnsafe(l.toList))
+  }
+
+  implicit class OptionalParserOps[E](val p: P[Option[E]]) extends AnyVal {
+    def toBoolean: P[Boolean] = p.map(_.isDefined)
   }
 
   def K(s: String): P[Unit] = P(parsers.Terminals.IgnoreCase(s) ~ &(" "))
 
-  val cypher = P(statement ~ "".? ~ End)
+  val cypher: P[Cypher] = P(statement ~ "".? ~ End).map(Cypher)
 
-  val statement = P(query)
+  val statement: P[Statement] = P(query)
 
-  val query = P(regularQuery | standaloneCall)
+  val query: P[Query] = P(regularQuery | standaloneCall)
 
-  val regularQuery = P(singleQuery ~ union.rep)
+  val regularQuery: P[RegularQuery] = P(
+    singleQuery ~ union.rep
+  ).map { case (lhs, unions) =>
+    if (unions.isEmpty) lhs
+    else unions.foldLeft(lhs: RegularQuery) { case (currentQuery, nextUnion) => nextUnion(currentQuery) }
+  }
 
-  val union = P(K("UNION") ~ K("ALL").? ~ singleQuery)
+  val union: P[RegularQuery => Union] = P(
+    K("UNION") ~ K("ALL").!.?.toBoolean ~ singleQuery
+  ).map { case (all, rhs) => lhs => Union(all, lhs, rhs) }
 
-  val singleQuery = P(clause.rep(min = 1))
+  val singleQuery: P[SingleQuery] = P(clause.rep(min = 1).toNonEmptyList).map(SingleQuery)
 
-  val clause = P(
+  val clause: P[Clause] = P(
     merge
       | delete
       | set
@@ -81,199 +95,341 @@ object CypherFastparse {
       | matchClause
       | unwind
       | inQueryCall
-      | returnClause)
+      | returnClause
+  )
 
-  val withClause = P(K("WITH") ~ K("DISTINCT").?.! ~ returnBody ~ where.?)
+  val withClause: P[With] = P(K("WITH") ~ K("DISTINCT").!.?.toBoolean ~ returnBody ~ where.?).map(With.tupled)
 
-  val matchClause = P(K("OPTIONAL").?.! ~ K("MATCH") ~ pattern ~ where.?)
+  val matchClause: P[Match] = P(K("OPTIONAL").!.?.toBoolean ~ K("MATCH") ~ pattern ~ where.?).map(Match.tupled)
 
-  val unwind = P(K("UNWIND") ~ expression ~ K("AS") ~ variable)
+  val unwind: P[Unwind] = P(K("UNWIND") ~ expression ~ K("AS") ~ variable).map(Unwind.tupled)
 
-  val merge = P(K("MERGE") ~ patternPart ~ mergeAction.rep)
+  val merge: P[Merge] = P(K("MERGE") ~ patternPart ~ mergeAction.rep.toList).map(Merge.tupled)
 
-  val mergeAction = P(onMatchMergeAction | onCreateMergeAction)
+  val mergeAction: P[MergeAction] = P(onMatchMergeAction | onCreateMergeAction)
 
-  val onMatchMergeAction = P(K("ON") ~ K("MATCH") ~ set)
+  val onMatchMergeAction: P[OnMerge] = P(K("ON") ~ K("MATCH") ~ set).map(OnMerge)
 
-  val onCreateMergeAction = P(K("ON") ~ K("CREATE") ~ set)
+  val onCreateMergeAction: P[OnCreate] = P(K("ON") ~ K("CREATE") ~ set).map(OnCreate)
 
-  val create = P(K("CREATE") ~ pattern)
+  val create: P[Create] = P(K("CREATE") ~ pattern).map(Create)
 
-  val set = P(K("SET") ~ setItem.rep(min = 1))
+  val set: P[SetClause] = P(K("SET") ~ setItem.rep(min = 1).toNonEmptyList).map(SetClause)
 
-  val setItem = P(
+  val setItem: P[SetItem] = P(
     setProperty
       | setVariable
       | addToVariable
       | setLabels
   )
 
-  val setProperty = P(propertyExpression ~ "=" ~ expression)
+  val setProperty: P[SetProperty] = P(propertyExpression ~ "=" ~ expression).map(SetProperty.tupled)
 
-  val setVariable = P(variable ~ "=" ~ expression)
+  val setVariable: P[SetVariable] = P(variable ~ "=" ~ expression).map(SetVariable.tupled)
 
-  val addToVariable = P(variable ~ "+=" ~ expression)
+  val addToVariable: P[SetAdditionalItem] = P(variable ~ "+=" ~ expression).map(SetAdditionalItem.tupled)
 
-  val setLabels = P(variable ~ nodeLabels)
+  val setLabels: P[SetLabels] = P(variable ~ nodeLabel.rep(min = 1).toNonEmptyList).map(SetLabels.tupled)
 
-  val delete = P(K("DETACH").?.! ~ K("DELETE") ~ expression.rep(min = 1))
+  val delete: P[Delete] = P(
+    K("DETACH").!.?.toBoolean ~ K("DELETE") ~ expression.rep(min = 1).toNonEmptyList
+  ).map(Delete.tupled)
 
-  val remove = P(K("REMOVE") ~ removeItem.rep(min = 1))
+  val remove: P[Remove] = P(K("REMOVE") ~ removeItem.rep(min = 1).toNonEmptyList).map(Remove)
 
-  val removeItem = P(removeLabel | removeProperty)
+  val removeItem: P[RemoveItem] = P(removeNodeVariable | removeProperty)
 
-  val removeLabel = P(variable ~ nodeLabels)
+  val removeNodeVariable: P[RemoveNodeVariable] = P(
+    variable ~ nodeLabel.rep(min = 1).toNonEmptyList
+  ).map(RemoveNodeVariable.tupled)
 
-  val removeProperty = P(propertyExpression)
+  val removeProperty: P[PropertyExpression] = propertyExpression
 
-  val inQueryCall = P(K("CALL") ~ explicitProcedureInvocation ~ (K("YIELD") ~ yieldItems).?)
+  val inQueryCall: P[InQueryCall] = P(K("CALL") ~ explicitProcedureInvocation ~ yieldItems).map(InQueryCall.tupled)
 
-  val standaloneCall = P(K("CALL") ~ (explicitProcedureInvocation | implicitProcedureInvocation) ~ (K("YIELD") ~ yieldItems).?)
+  val standaloneCall: P[StandaloneCall] = P(
+    K("CALL") ~ procedureInvocation ~ yieldItems
+  ).map(StandaloneCall.tupled)
 
-  val yieldItems = P(explicitYieldItems | allYieldItems)
+  val procedureInvocation: P[ProcedureInvocation] = P(explicitProcedureInvocation | implicitProcedureInvocation)
 
-  val explicitYieldItems = P(yieldItem.rep(min = 1, sep = ","))
+  val yieldItems: P[List[YieldItem]] = P(
+    (K("YIELD") ~ (explicitYieldItems | noYieldItems)).?.map(_.getOrElse(Nil))
+  )
 
-  val allYieldItems = P("-")
+  val explicitYieldItems: P[List[YieldItem]] = P(yieldItem.rep(min = 1, sep = ",").toList)
 
-  val yieldItem = P((procedureResultField ~ K("AS")).? ~ variable)
+  val noYieldItems: P[List[YieldItem]] = P("-").map(_ => Nil)
 
-  val returnClause = P(K("RETURN") ~ K("DISTINCT").?.! ~ returnBody)
+  val yieldItem: P[YieldItem] = P((procedureResultField ~ K("AS")).? ~ variable).map(YieldItem.tupled)
 
-  val returnBody = P(returnItems ~ order.? ~ skip.? ~ limit.?)
+  val returnClause: P[Return] = P(K("RETURN") ~ K("DISTINCT").!.?.toBoolean ~ returnBody).map(Return.tupled)
 
-  // TODO: Validate either star or nonempty explicit return items
-  val returnItems = P(K("*").? ~ ("," ~ returnItem).rep.?)
+  val returnBody: P[ReturnBody] = P(returnItems ~ orderBy.? ~ skip.? ~ limit.?).map(ReturnBody.tupled)
 
-  val returnItem = P(aliasedReturnItem | simpleReturnItem)
+  val returnItems: P[ReturnItems] = P(
+    (K("*") ~ "," ~ returnItem.rep(sep = ",").toList).map(ReturnItems(true, _))
+      | returnItem.rep(min = 1, sep = ",").toList.map(ReturnItems(false, _))
+  )
 
-  val aliasedReturnItem = P(expression ~ K("AS") ~ variable)
+  val returnItem: P[ReturnItem] = P(alias | expression)
 
-  val simpleReturnItem = P(expression)
+  val alias: P[Alias] = P(expression ~ K("AS") ~ variable).map(Alias.tupled)
 
-  val order = P(K("ORDER") ~ K("BY") ~ sortItem.rep(min = 1, sep = ","))
+  val orderBy: P[OrderBy] = P(K("ORDER") ~ K("BY") ~ sortItem.rep(min = 1, sep = ",").toNonEmptyList).map(OrderBy)
 
-  val skip = P(K("SKIP") ~ expression)
+  val skip: P[Skip] = P(K("SKIP") ~ expression).map(Skip)
 
-  val limit = P(K("LIMIT") ~ expression)
+  val limit: P[Limit] = P(K("LIMIT") ~ expression).map(Limit)
 
-  val sortItem = P(expression ~ (K("ASCENDING") | K("ASC") | K("DESCENDING") | K("DESC")).?)
+  val sortItem: P[SortItem] = P(
+    expression ~ (
+                 K("ASCENDING").map(_ => Ascending)
+                   | K("ASC").map(_ => Ascending)
+                   | K("DESCENDING").map(_ => Descending)
+                   | K("DESC").map(_ => Descending)
+                 ).?
+  ).map(SortItem.tupled)
 
-  val where = P(K("WHERE") ~ expression)
+  val where: P[Where] = P(K("WHERE") ~ expression).map(Where)
 
-  val pattern = P(patternPart.rep(min = 1, sep = ","))
+  val pattern: P[Pattern] = P(patternPart.rep(min = 1, sep = ",").toNonEmptyList).map(Pattern)
 
-  val patternPart = P(namedPatternPart | anonymousPatternPart)
+  val patternPart: P[PatternPart] = P((variable.? ~ "=" ~ patternElement).map(PatternPart.tupled))
 
-  val namedPatternPart = P(variable ~ "=" ~ anonymousPatternPart)
+  val patternElement: P[PatternElement] = P(
+    (nodePattern ~ patternElementChain.rep.toList).map(PatternElement.tupled)
+      | "(" ~ patternElement ~ ")"
+  )
 
-  val anonymousPatternPart = P(patternElement)
+  val nodePattern: P[NodePattern] = P(
+    "(" ~ variable.? ~ nodeLabel.rep.toList ~ properties.? ~ ")"
+  ).map(NodePattern.tupled)
 
-  val patternElement: P[PatternElement] = P(patternElementWithoutParentheses | patternElementWithParentheses).map(???)
+  val patternElementChain: P[PatternElementChain] = P(relationshipPattern ~ nodePattern).map(PatternElementChain.tupled)
 
-  val patternElementWithoutParentheses = P(nodePattern ~ patternElementChain.rep)
+  val relationshipPattern: P[RelationshipPattern] = P(leftToRightPattern | rightToLeftPattern | undirectedPattern)
 
-  val patternElementWithParentheses = P("(" ~ patternElement ~ ")")
+  val leftToRightPattern: P[LeftToRight] = P(dash ~ relationshipDetail.? ~ dash ~ rightArrowHead).map(LeftToRight)
 
-  val nodePattern = P("(" ~ variable.? ~ nodeLabels.? ~ properties.? ~ ")")
+  val rightToLeftPattern: P[RightToLeft] = P(leftArrowHead ~ dash ~ relationshipDetail.? ~ dash).map(RightToLeft)
 
-  val patternElementChain = P(relationshipPattern ~ nodePattern)
+  val undirectedPattern: P[Undirected] = P(undirectedPatternWithArrowHeads | undirectedPatternWithoutArrowHeads)
 
-  val relationshipPattern = P(leftToRightPattern | rightToLeftPattern | undirectedPattern)
+  val undirectedPatternWithArrowHeads: P[Undirected] = P(
+    leftArrowHead ~ dash ~ relationshipDetail.? ~ dash ~ rightArrowHead
+  ).map(Undirected)
 
-  val leftToRightPattern = P(dash ~ relationshipDetail.? ~ dash ~ rightArrowHead)
+  val undirectedPatternWithoutArrowHeads: P[Undirected] = P(
+    dash ~ relationshipDetail.? ~ dash
+  ).map(Undirected)
 
-  val rightToLeftPattern = P(leftArrowHead ~ dash ~ relationshipDetail.? ~ dash)
-
-  val undirectedPattern = P(undirectedPatternWithArrowHeads | undirectedPatternWithoutArrowHeads)
-
-  val undirectedPatternWithArrowHeads = P(leftArrowHead ~ dash ~ relationshipDetail.? ~ dash ~ rightArrowHead)
-
-  val undirectedPatternWithoutArrowHeads = P(dash ~ relationshipDetail.? ~ dash)
-
-  val relationshipDetail = P("[" ~ variable.? ~ relationshipTypes.? ~ rangeLiteral.? ~ properties.? ~ "]")
-
-  val properties = P(mapLiteral | parameter)
-
-  // TODO: First colon is not optional
-  val relationshipTypes = P((":" ~ relTypeName).rep(min = 1, sep = "|"))
-
-  val nodeLabels = P(nodeLabel.rep(min = 1))
-
-  val nodeLabel = P("=" ~ labelName)
-
-  val rangeLiteral = P("*" ~ (integerLiteral.? ~ (".." ~ integerLiteral).?))
-
-  val labelName = P(schemaName)
-
-  val relTypeName = P(schemaName)
-
-  val expression: P[Expression] = P(orExpression).map(???)
-
-  val orExpression = P(xorExpression ~ (K("OR") ~ xorExpression).rep)
-
-  val xorExpression = P(andExpression ~ (K("XOR") ~ andExpression).rep)
-
-  val andExpression = P(notExpression ~ (K("AND") ~ notExpression).rep)
-
-  val notExpression = P(K("NOT").rep ~ comparisonExpression)
-
-  val comparisonExpression = P(addOrSubtractExpression ~ partialComparisonExpression.rep)
-
-  val addOrSubtractExpression = P(multiplyDivideModuloExpression
-    ~ (("+" ~ multiplyDivideModuloExpression) | ("-" ~ multiplyDivideModuloExpression)).rep)
-
-  val multiplyDivideModuloExpression = P(powerOfExpression
-    ~ (("*" ~ powerOfExpression) | ("/" ~ powerOfExpression) | ("%" ~ powerOfExpression)).rep)
-
-  val powerOfExpression = P(unaryAddOrSubtractExpression ~ ("^" ~ unaryAddOrSubtractExpression).rep)
-
-  val unaryAddOrSubtractExpression = P(("+" | "-").rep ~ stringListNullOperatorExpression)
-
-  val stringListNullOperatorExpression = P(propertyOrLabelsExpression
-    ~ (stringOperatorExpression | listOperatorExpression | nullOperatorExpression).rep)
-
-  val stringOperatorExpression = P(K("IN") | (K("STARTS") ~ K("WITH")) | (K("ENDS") ~ K("WITH")) | K("CONTAINS")
-    ~ propertyOrLabelsExpression)
-
-  val listOperatorExpression = P(singleElementListOperatorExpression | rangeListOperatorExpression)
-
-  val singleElementListOperatorExpression = P("[" ~ expression ~ "]")
-
-  val rangeListOperatorExpression = P("[" ~ expression.? ~ ".." ~ expression.? ~ "]")
-
-  val nullOperatorExpression = P(isNull | isNotNull)
-
-  val isNull = P(K("IS") ~ K("NULL"))
-
-  val isNotNull = P(K("IS") ~ K("NOY") ~ K("NULL"))
-
-  val propertyOrLabelsExpression = P(atom ~ propertyLookup.rep ~ nodeLabels.?)
+  val relationshipDetail: P[RelationshipDetail] = P(
+    "[" ~ variable.? ~ relationshipTypes ~ rangeLiteral.? ~ properties.? ~ "]"
+  ).map(RelationshipDetail.tupled)
+
+  val properties: P[Properties] = P(mapLiteral | parameter)
+
+  val relationshipTypes: P[List[RelTypeName]] = P(
+    (":" ~ relTypeName).rep(min = 1, sep = "|").toList.?.map(_.getOrElse(Nil))
+  )
+
+  val nodeLabel: P[NodeLabel] = P("=" ~ labelName.!).map(NodeLabel)
+
+  val rangeLiteral: P[RangeLiteral] = P(
+    "*" ~ (integerLiteral.? ~ (".." ~ integerLiteral).?)
+  ).map(RangeLiteral.tupled)
+
+  val labelName: P[Unit] = schemaName
+
+  val relTypeName: P[RelTypeName] = P(schemaName).!.map(RelTypeName)
+
+  val expression: P[Expression] = orExpression
+
+  val orExpression: P[Expression] = P(
+    xorExpression ~ (K("OR") ~ xorExpression).rep
+  ).map { case (lhs, rhs) =>
+    if (rhs.isEmpty) lhs
+    else OrExpression(NonEmptyList(lhs, rhs.toList))
+  }
+
+  val xorExpression: P[Expression] = P(
+    andExpression ~ (K("XOR") ~ andExpression).rep
+  ).map { case (lhs, rhs) =>
+    if (rhs.isEmpty) lhs
+    else XorExpression(NonEmptyList(lhs, rhs.toList))
+  }
+
+  val andExpression: P[Expression] = P(
+    notExpression ~ (K("AND") ~ notExpression).rep
+  ).map { case (lhs, rhs) =>
+    if (rhs.isEmpty) lhs
+    else AndExpression(NonEmptyList(lhs, rhs.toList))
+  }
+
+  val notExpression: P[Expression] = P(
+    K("NOT").!.rep.map(_.length) ~ comparisonExpression
+  ).map { case (notCount, expr) =>
+    notCount % 2 match {
+      case 0 => expr
+      case 1 => NotExpression(expr)
+    }
+  }
+
+  val comparisonExpression: P[Expression] = P(
+    addOrSubtractExpression ~ partialComparisonExpression.rep
+  ).map { case (lhs, ops) =>
+    if (ops.isEmpty) lhs
+    else ops.foldLeft(lhs) { case (currentLhs, nextOp) => nextOp(currentLhs) }
+  }
+
+  val partialComparisonExpression: P[Expression => Expression] = P(
+    partialEqualComparison.map(rhs => (lhs: Expression) => EqualExpression(lhs, rhs))
+      | partialNotEqualExpression.map(rhs => (lhs: Expression) => NotExpression(EqualExpression(lhs, rhs)))
+      | partialLessThanExpression.map(rhs => (lhs: Expression) => LessThanExpression(lhs, rhs))
+      | partialGreaterThanExpression.map(rhs => (lhs: Expression) => NotExpression(LessThanOrEqualExpression(lhs, rhs)))
+      | partialLessThanOrEqualExpression.map(rhs => (lhs: Expression) => LessThanOrEqualExpression(lhs, rhs))
+      | partialGreaterThanOrEqualExpression.map(rhs => (lhs: Expression) => NotExpression(LessThanExpression(lhs, rhs)))
+  )
+
+  val partialEqualComparison: P[Expression] = P("=" ~ addOrSubtractExpression)
+
+  val partialNotEqualExpression: P[Expression] = P("<>" ~ addOrSubtractExpression)
+
+  val partialLessThanExpression: P[Expression] = P("<" ~ addOrSubtractExpression)
+
+  val partialGreaterThanExpression: P[Expression] = P(">" ~ addOrSubtractExpression)
+
+  val partialLessThanOrEqualExpression: P[Expression] = P("<=" ~ addOrSubtractExpression)
+
+  val partialGreaterThanOrEqualExpression: P[Expression] = P(">-" ~ addOrSubtractExpression)
+
+  val addOrSubtractExpression: P[Expression] = P(
+    multiplyDivideModuloExpression ~ (partialAddExpression | partialSubtractExpression).rep
+  ).map { case (lhs, ops) =>
+    if (ops.isEmpty) lhs
+    else ops.foldLeft(lhs) { case (currentLhs, partialExpression) => partialExpression(currentLhs) }
+  }
+
+  val partialAddExpression: P[Expression => Expression] = P(
+    "+" ~ multiplyDivideModuloExpression
+  ).map(rhs => (lhs: Expression) => AddExpression(lhs, rhs))
+
+  val partialSubtractExpression: P[Expression => Expression] = P(
+    "+" ~ multiplyDivideModuloExpression
+  ).map(rhs => (lhs: Expression) => SubtractExpression(lhs, rhs))
+
+  val multiplyDivideModuloExpression: P[Expression] = P(
+    powerOfExpression ~
+      (partialMultiplyExpression | partialDivideExpression | partialModuloExpression).rep
+  ).map { case (lhs, ops) =>
+    if (ops.isEmpty) lhs
+    else ops.foldLeft(lhs) { case (currentLhs, nextOp) => nextOp(currentLhs) }
+  }
+
+  val partialMultiplyExpression: P[Expression => Expression] = P(
+    "*" ~ powerOfExpression
+  ).map(rhs => lhs => MultiplyExpression(lhs, rhs))
+
+  val partialDivideExpression: P[Expression => Expression] = P(
+    "/" ~ powerOfExpression
+  ).map(rhs => lhs => DivideExpression(lhs, rhs))
+
+  val partialModuloExpression: P[Expression => Expression] = P(
+    "%" ~ powerOfExpression
+  ).map(rhs => lhs => ModuloExpression(lhs, rhs))
+
+  val powerOfExpression: P[Expression] = P(
+    unaryAddOrSubtractExpression ~ ("^" ~ unaryAddOrSubtractExpression).rep
+  ).map { case (lhs, ops) =>
+    if (ops.isEmpty) lhs
+    else { // "power of" is right associative => reverse the order of the "power of" expressions before fold left
+      val head :: tail = (lhs :: ops.toList).reverse
+      tail.foldLeft(head) { case (currentExponent, nextBase) => PowerOfExpression(nextBase, currentExponent) }
+    }
+  }
+
+  val unaryAddOrSubtractExpression: P[Expression] = P(
+    (P("+").map(_ => 0) | P("-").map(_ => 1)).rep.map(unarySubtractions => unarySubtractions.sum % 2 match {
+      case 0 => false
+      case 1 => true
+    }) ~ stringListNullOperatorExpression
+  ).map { case (unarySubtract, expr) =>
+    if (unarySubtract) UnarySubtractExpression(expr)
+    else expr
+  }
+
+  val stringListNullOperatorExpression: P[Expression] = P(
+    propertyOrLabelsExpression
+      ~ (stringOperatorExpression | listOperatorExpression | nullOperatorExpression).rep
+  ).map {
+    case (expr, ops) =>
+      if (ops.isEmpty) expr
+      else StringListNullOperatorExpression(expr, NonEmptyList.fromListUnsafe(ops.toList))
+  }
+
+  val stringOperatorExpression: P[StringOperatorExpression] = P(
+    in
+      | startsWith
+      | endsWith
+      | contains
+  )
+
+  val in: P[In] = P(K("IN") ~ propertyOrLabelsExpression).map(In)
+
+  val startsWith: P[StartsWith] = P(K("STARTS") ~ K("WITH") ~ propertyOrLabelsExpression).map(StartsWith)
+
+  val endsWith: P[EndsWith] = P(K("ENDS") ~ K("WITH") ~ propertyOrLabelsExpression).map(EndsWith)
+
+  val contains: P[Contains] = P(K("CONTAINS") ~ propertyOrLabelsExpression).map(Contains)
+
+  val listOperatorExpression: P[ListOperatorExpression] = P(
+    singleElementListOperatorExpression
+      | rangeListOperatorExpression
+  )
+
+  val singleElementListOperatorExpression: P[SingleElementListOperatorExpression] = P(
+    "[" ~ expression ~ "]"
+  ).map(SingleElementListOperatorExpression)
+
+  val rangeListOperatorExpression: P[RangeListOperatorExpression] = P(
+    "[" ~ expression.? ~ ".." ~ expression.? ~ "]"
+  ).map(RangeListOperatorExpression.tupled)
+
+  val nullOperatorExpression: P[NullOperatorExpression] = P(isNull | isNotNull)
+
+  val isNull: P[IsNull.type] = P(K("IS") ~ K("NULL")).map(_ => IsNull)
+
+  val isNotNull: P[IsNotNull.type] = P(K("IS") ~ K("NOY") ~ K("NULL")).map(_ => IsNotNull)
+
+  val propertyOrLabelsExpression: P[PropertyOrLabelsExpression] = P(
+    atom ~ propertyLookup.rep.toList ~ nodeLabel.rep.toList
+  ).map(PropertyOrLabelsExpression.tupled)
 
   val atom: P[Atom] = P(
     literal
       | parameter
       | caseExpression
-      | (K("COUNT") ~ "(" ~ "*" ~ ")")
+      | (K("COUNT") ~ "(" ~ "*" ~ ")").map(_ => CountStar)
       | listComprehension
       | patternComprehension
-      | (K("FILTER") ~ "(" ~ filterExpression ~ ")")
-      | (K("EXTRACT") ~ "(" ~ filterExpression ~ ("|" ~ expression).? ~ ")")
-      | (K("ALL") ~ "(" ~ filterExpression ~ ")")
-      | (K("ANY") ~ "(" ~ filterExpression ~ ")")
-      | (K("NONE") ~ "(" ~ filterExpression ~ ")")
-      | (K("SINGLE") ~ "(" ~ filterExpression ~ ")")
+      | (K("FILTER") ~ "(" ~ filterExpression ~ ")").map(Filter)
+      | (K("EXTRACT") ~ "(" ~ filterExpression ~ ("|" ~ expression).? ~ ")").map(Extract.tupled)
+      | (K("ALL") ~ "(" ~ filterExpression ~ ")").map(FilterAll)
+      | (K("ANY") ~ "(" ~ filterExpression ~ ")").map(FilterAny)
+      | (K("NONE") ~ "(" ~ filterExpression ~ ")").map(FilterNone)
+      | (K("SINGLE") ~ "(" ~ filterExpression ~ ")").map(FilterSingle)
       | relationshipsPattern
       | parenthesizedExpression
       | functionInvocation
       | variable
-  ).map(???)
+  )
 
-  val literal = P(
+  val literal: P[Literal] = P(
     numberLiteral
       | stringLiteral
       | booleanLiteral
-      | K("NULL")
+      | K("NULL").!.map(_ => NullLiteral)
       | mapLiteral
       | listLiteral
   )
@@ -281,105 +437,126 @@ object CypherFastparse {
   // TODO: Fix
   val stringLiteral: P[StringLiteral] = ???
 
-  val booleanLiteral = P(K("TRUE") | K("FALSE"))
+  val booleanLiteral: P[BooleanLiteral] = P(
+    K("TRUE").!.map(_ => true)
+      | K("FALSE").!.map(_ => false)
+  ).map(BooleanLiteral)
 
-  val listLiteral = P("[" ~ expression.rep(sep = ",") ~ "]")
+  val listLiteral: P[ListLiteral] = P("[" ~ expression.rep(sep = ",").toList ~ "]").map(ListLiteral)
 
-  val partialComparisonExpression = P(
-    ("=" ~ addOrSubtractExpression)
-      | ("<>" ~ addOrSubtractExpression)
-      | ("<" ~ addOrSubtractExpression)
-      | (">" ~ addOrSubtractExpression)
-      | ("<=" ~ addOrSubtractExpression)
-      | (">=" ~ addOrSubtractExpression)
+  val parenthesizedExpression: P[ParenthesizedExpression] = P("(" ~ expression ~ ")").map(ParenthesizedExpression)
+
+  val relationshipsPattern: P[RelationshipsPattern] = P(
+    nodePattern ~ patternElementChain.rep(min = 1).toNonEmptyList
+  ).map(RelationshipsPattern.tupled)
+
+  val filterExpression: P[FilterExpression] = P(idInColl ~ where.?).map(FilterExpression.tupled)
+
+  val idInColl: P[IdInColl] = P(variable ~ K("IN") ~ expression).map(IdInColl.tupled)
+
+  val functionInvocation: P[FunctionInvocation] = P(
+    functionName ~ "(" ~ K("DISTINCT").!.?.toBoolean ~ expression.rep(sep = ",").toList ~ ")"
+  ).map(FunctionInvocation.tupled)
+
+  val functionName: P[FunctionName] = P(
+    symbolicName.!.map(SymbolicName)
+      | K("EXISTS").map(_ => Exists)
   )
 
-  val parenthesizedExpression = P("(" ~ expression ~ ")")
+  val explicitProcedureInvocation: P[ExplicitProcedureInvocation] = P(
+    procedureName ~ "(" ~ expression.rep(sep = ",").toList ~ ")"
+  ).map(ExplicitProcedureInvocation.tupled)
 
-  val relationshipsPattern = P(nodePattern ~ patternElementChain.rep(min = 1))
+  val implicitProcedureInvocation: P[ImplicitProcedureInvocation] = P(procedureName).map(ImplicitProcedureInvocation)
 
-  val filterExpression = P(idInColl ~ where.?)
+  val procedureResultField: P[ProcedureResultField] = P(symbolicName.!.map(SymbolicName)).map(ProcedureResultField)
 
-  val idInColl = P(variable ~ K("IN") ~ expression)
+  val procedureName: P[ProcedureName] = P(namespace ~ symbolicName.!.map(SymbolicName)).map(ProcedureName.tupled)
 
-  val functionInvocation = P(functionName ~ "(" ~ K("DISTINCT").?.! ~ expression.rep(sep = ",") ~ ")")
+  val namespace: P[Namespace] = P((symbolicName.!.map(SymbolicName) ~ ".").rep.toList).map(Namespace)
 
-  val functionName = P(symbolicName | K("EXISTS"))
+  val listComprehension: P[ListComprehension] = P(
+    "[" ~ filterExpression ~ ("|" ~ expression).? ~ "]"
+  ).map(ListComprehension.tupled)
 
-  val explicitProcedureInvocation = P(procedureName ~ "(" ~ expression.rep(sep = ",") ~ ")")
+  val patternComprehension: P[PatternComprehension] = P(
+    "[" ~ (variable ~ "=").? ~ relationshipsPattern ~ (K("WHERE") ~ expression).? ~ "|" ~ expression ~ "]"
+  ).map {
+    // Switch parameter order. Required to support automated child inference in okapi trees.
+    case (first, second, third, fourth) => PatternComprehension(first, second, fourth, third)
+  }
 
-  val implicitProcedureInvocation = P(procedureName)
+  val propertyLookup: P[PropertyLookup] = P("." ~ propertyKeyName)
 
-  val procedureResultField = P(symbolicName)
+  val caseExpression: P[CaseExpression] = P(
+    K("CASE") ~ expression.? ~ caseAlternatives.rep(min = 1).toNonEmptyList ~ (K("ELSE") ~ expression).? ~ K("END")
+  ).map(CaseExpression.tupled)
 
-  val procedureName = P(namespace ~ symbolicName)
+  val caseAlternatives: P[CaseAlternatives] = P(
+    K("WHEN") ~ expression ~ K("THEN") ~ expression
+  ).map(CaseAlternatives.tupled)
 
-  val namespace = P((symbolicName ~ ".").rep)
+  val variable: P[Variable] = P(symbolicName).!.map(Variable)
 
-  val listComprehension = P("[" ~ filterExpression ~ ("|" ~ expression).? ~ "]")
-
-  val patternComprehension = P("[" ~ (variable ~ "=").? ~ relationshipsPattern ~ (K("WHERE") ~ expression).? ~ "|" ~ expression ~ "]")
-
-  val propertyLookup = P("." ~ propertyKeyName)
-
-  val caseExpression = P(
-    (K("CASE") ~ caseAlternatives.rep(min = 1))
-      | (K("CASE") ~ expression ~ caseAlternatives.rep(min = 1) ~ (K("ELSE") ~ expression).? ~ K("END"))
-  )
-
-  val caseAlternatives = P(K("WHEN") ~ expression ~ K("THEN") ~ expression)
-
-  val variable = P(symbolicName)
-
-  val numberLiteral = P(
+  val numberLiteral: P[NumberLiteral] = P(
     doubleLiteral
       | integerLiteral
   )
 
-  val mapLiteral: P[MapLiteral] = P("{" ~ (propertyKeyName ~ "=" ~ expression ~ ("," ~ propertyKeyName ~ "=" ~ expression).rep).? ~ "}").map(???)
+  val mapLiteral: P[MapLiteral] = P(
+    "{" ~ (propertyKeyName ~ "=" ~ expression).rep(sep = ",") ~ "}"
+  ).map(_.toList).map(MapLiteral)
 
-  val parameter = P("$" ~ (symbolicName | decimalInteger))
+  val parameter: P[Parameter] = P("$" ~ (symbolicName.!.map(SymbolicName) | indexParameter))
 
-  val propertyExpression = P(atom ~ propertyLookup.rep(min = 1))
+  val indexParameter: P[IndexParameter] = P(decimalInteger).!.map(_.toLong).map(IndexParameter)
 
-  val propertyKeyName = P(schemaName)
+  val propertyExpression: P[PropertyExpression] = P(
+    atom ~ propertyLookup.rep(min = 1).toNonEmptyList
+  ).map(PropertyExpression.tupled)
 
-  val integerLiteral = P(hexInteger | octalInteger | decimalInteger)
+  val propertyKeyName: P[PropertyKeyName] = P(schemaName).!.map(PropertyKeyName)
 
-  val hexInteger = P("0x" ~ hexDigit.rep(min = 1))
+  val integerLiteral: P[IntegerLiteral] = P(
+    hexInteger.!.map(h => java.lang.Long.parseLong(h.drop(2), 16))
+      | octalInteger.!.map(java.lang.Long.parseLong(_, 8))
+      | decimalInteger.!.map(java.lang.Long.parseLong)
+  ).map(IntegerLiteral)
 
-  val decimalInteger = P(zeroDigit | nonZeroDigit ~ digit.rep)
+  val hexInteger: P[Unit] = P("0x" ~ hexDigit.rep(min = 1))
 
-  val octalInteger = P(zeroDigit ~ octDigit.rep(min = 1))
+  val decimalInteger: P[Unit] = P(zeroDigit | nonZeroDigit ~ digit.rep)
 
-  val hexLetter = P(CharIn('a' to 'f', 'A' to 'F'))
+  val octalInteger: P[Unit] = P(zeroDigit ~ octDigit.rep(min = 1))
 
-  val hexDigit = P(digit | hexLetter)
+  val hexLetter: P[Unit] = P(CharIn('a' to 'f', 'A' to 'F'))
 
-  val digit = P(zeroDigit | nonZeroDigit)
+  val hexDigit: P[Unit] = P(digit | hexLetter)
 
-  val nonZeroDigit = P(CharIn('1' to '9'))
+  val digit: P[Unit] = P(zeroDigit | nonZeroDigit)
 
-  val octDigit = P(CharIn('0' to '7'))
+  val nonZeroDigit: P[Unit] = P(CharIn('1' to '9'))
 
-  val zeroDigit = P("0")
+  val octDigit: P[Unit] = P(CharIn('0' to '7'))
 
-  val doubleLiteral = P(
-    exponentDecimalReal
-      | regularDecimalReal
-  )
+  val zeroDigit: P[Unit] = P("0")
 
-  val exponentDecimalReal = P(
+  val doubleLiteral: P[DoubleLiteral] = P(
+    exponentDecimalReal.!
+      | regularDecimalReal.!
+  ).map(d => DoubleLiteral(d.toDouble))
+
+  val exponentDecimalReal: P[Unit] = P(
     digit.rep(min = 1)
       | (digit.rep(min = 1) ~ "." ~ digit.rep(min = 1))
       | ("." ~ digit.rep(min = 1) ~ CharIn("eE") ~ "-".? ~ digit.rep(min = 1))
   )
 
-  val regularDecimalReal = P(digit.rep ~ "." ~ digit.rep(min = 1))
+  val regularDecimalReal: P[Unit] = P(digit.rep ~ "." ~ digit.rep(min = 1))
 
-  val schemaName = P(symbolicName | reservedWord)
+  val schemaName: P[Unit] = P(symbolicName | reservedWord)
 
-  val reservedWord = P(
+  val reservedWord: P[Unit] = P(
     K("ALL")
       | K("ASC")
       | K("ASCENDING")
@@ -435,7 +612,7 @@ object CypherFastparse {
       | K("DROP")
   )
 
-  val symbolicName = P(unescapedSymbolicName | escapedSymbolicName | hexLetter
+  val symbolicName: P[Unit] = P(unescapedSymbolicName | escapedSymbolicName | hexLetter
     | K("COUNT")
     | K("FILTER")
     | K("EXTRACT")
@@ -444,21 +621,21 @@ object CypherFastparse {
     | K("SINGLE")
   )
 
-  val unescapedSymbolicName = P(identifierStart ~ identifierPart.rep(min = 1))
+  val unescapedSymbolicName: P[Unit] = P(identifierStart ~ identifierPart.rep(min = 1))
 
   // TODO: Constrain
-  val identifierStart = P(AnyChar)
+  val identifierStart: P[Unit] = P(AnyChar)
 
   // TODO: Constrain
-  val identifierPart = P(AnyChar)
+  val identifierPart: P[Unit] = P(AnyChar)
 
   //     * Any character except "`", enclosed within `backticks`. Backticks are escaped with double backticks. */
-  val escapedSymbolicName = P(("`" ~ escapedSymbolicName0.rep ~ "`").rep(min = 1))
+  val escapedSymbolicName: P[Unit] = P(("`" ~ escapedSymbolicName0.rep ~ "`").rep(min = 1))
 
   // TODO: Constrain
-  val escapedSymbolicName0 = P(AnyChar)
+  val escapedSymbolicName0: P[Unit] = P(AnyChar)
 
-  val leftArrowHead = P(
+  val leftArrowHead: P[Unit] = P(
     "<"
       | "⟨"
       | "〈"
@@ -466,7 +643,7 @@ object CypherFastparse {
       | "＜"
   )
 
-  val rightArrowHead = P(
+  val rightArrowHead: P[Unit] = P(
     ">"
       | "⟩"
       | "〉"
@@ -474,7 +651,7 @@ object CypherFastparse {
       | "＞"
   )
 
-  val dash = P(
+  val dash: P[Unit] = P(
     "-"
       | "­"
       | "‐"

@@ -577,7 +577,7 @@ case object AntlrAstTransformer extends CypherBaseVisitor[CypherAst] {
     SymbolicName(ctx.getText)
   }
 
-  override def visitOC_ListOperatorExpression(ctx: CypherParser.OC_ListOperatorExpressionContext): ListOperatorExpression = {
+  override def visitOC_ListOperatorExpression(ctx: CypherParser.OC_ListOperatorExpressionContext): RangeListOperatorExpression = {
     val dotDot: Option[Expression] = None
     val parsedChildren: List[Option[Expression]] = ctx.children.asScala.toList.flatMap {
       case c: CypherParser.OC_ExpressionContext =>

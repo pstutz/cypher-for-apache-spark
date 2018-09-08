@@ -17,30 +17,6 @@
   <properties>
     <project.rootdir>${project.parent.basedir}</project.rootdir>
   </properties>
-
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.antlr</groupId>
-        <artifactId>antlr4-maven-plugin</artifactId>
-        <version>${dep.antlr4.version}</version>
-        <configuration>
-          <listener>false</listener>
-          <visitor>true</visitor>
-        </configuration>
-        <executions>
-          <execution>
-            <id>antlr-generate</id>
-            <phase>generate-sources</phase>
-            <goals>
-              <goal>antlr4</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
-
   <dependencies>
 
     <!--Okapi Module-->
@@ -54,19 +30,6 @@
       <groupId>org.opencypher</groupId>
       <artifactId>okapi-api</artifactId>
       <version>${project.parent.version}</version>
-    </dependency>
-
-
-    <dependency>
-      <groupId>org.antlr</groupId>
-      <artifactId>antlr4-runtime</artifactId>
-      <version>${dep.antlr4.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.opencypher</groupId>
-      <artifactId>grammar</artifactId>
-      <version>1.0.0-M10</version>
     </dependency>
 
     <dependency>

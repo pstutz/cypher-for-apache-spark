@@ -125,7 +125,7 @@ object CypherParser {
 
   val withClause: P[With] = P(K("WITH") ~/ K("DISTINCT").!.?.toBoolean ~/ returnBody ~ where.?).map(With.tupled)
 
-  val matchClause: P[Match] = P(K("OPTIONAL").!.?.toBoolean ~ K("MATCH") ~/ pattern ~ where.?).map(Match.tupled).log()
+  val matchClause: P[Match] = P(K("OPTIONAL").!.?.toBoolean ~ K("MATCH") ~/ pattern ~ where.?).map(Match.tupled)
 
   val unwind: P[Unwind] = P(K("UNWIND") ~/ expression ~ K("AS") ~ variable).map(Unwind.tupled)
 
@@ -218,18 +218,18 @@ object CypherParser {
 
   val where: P[Where] = P(K("WHERE") ~ expression).map(Where)
 
-  val pattern: P[Pattern] = P(patternPart.rep(min = 1, sep = ",").toNonEmptyList).map(Pattern).log()
+  val pattern: P[Pattern] = P(patternPart.rep(min = 1, sep = ",").toNonEmptyList).map(Pattern)
 
   val patternPart: P[PatternPart] = P((variable ~ "=").? ~ patternElement).map(PatternPart.tupled)
 
   val patternElement: P[PatternElement] = P(
     (nodePattern ~ patternElementChain.rep.toList).map(PatternElement.tupled)
       | "(" ~ patternElement ~ ")"
-  ).log()
+  )
 
   val nodePattern: P[NodePattern] = P(
     "(" ~ variable.? ~ nodeLabel.rep.toList ~ properties.? ~ ")"
-  ).map(NodePattern.tupled).log()
+  ).map(NodePattern.tupled)
 
   val patternElementChain: P[PatternElementChain] = P(relationshipPattern ~ nodePattern).map(PatternElementChain.tupled)
 
@@ -251,7 +251,7 @@ object CypherParser {
 
   val relationshipDetail: P[RelationshipDetail] = P(
     "[" ~ variable.? ~ relationshipTypes ~ rangeLiteral.? ~ properties.? ~ "]"
-  ).map(RelationshipDetail.tupled)
+  ).?.map(_.map(RelationshipDetail.tupled).getOrElse(RelationshipDetail(None, List.empty, None, None)))
 
   val properties: P[Properties] = P(mapLiteral | parameter)
 
@@ -259,7 +259,7 @@ object CypherParser {
     (":" ~ relTypeName).rep(min = 1, sep = "|").toList.?.map(_.getOrElse(Nil))
   )
 
-  val nodeLabel: P[NodeLabel] = P("=" ~ labelName.!).map(NodeLabel)
+  val nodeLabel: P[NodeLabel] = P(":" ~ labelName.!).map(NodeLabel)
 
   val rangeLiteral: P[RangeLiteral] = P(
     "*" ~ (integerLiteral.? ~ (".." ~ integerLiteral).?)
@@ -539,7 +539,7 @@ object CypherParser {
     K("WHEN") ~ expression ~ K("THEN") ~ expression
   ).map(CaseAlternatives.tupled)
 
-  val variable: P[Variable] = P(symbolicName).!.map(Variable).log()
+  val variable: P[Variable] = P(symbolicName).!.map(Variable)
 
   val numberLiteral: P[NumberLiteral] = P(
     doubleLiteral
@@ -548,7 +548,7 @@ object CypherParser {
 
   val mapLiteral: P[MapLiteral] = P(
     "{" ~/ (propertyKeyName ~ ":" ~/ expression).rep(sep = ",") ~ "}"
-  ).map(_.toList).map(MapLiteral).log()
+  ).map(_.toList).map(MapLiteral)
 
   val parameter: P[Parameter] = P("$" ~ (symbolicName.!.map(SymbolicName) | indexParameter))
 
@@ -558,7 +558,7 @@ object CypherParser {
     atom ~ propertyLookup.rep(min = 1).toNonEmptyList
   ).map(PropertyExpression.tupled)
 
-  val propertyKeyName: P[PropertyKeyName] = P(schemaName).!.map(PropertyKeyName).log()
+  val propertyKeyName: P[PropertyKeyName] = P(schemaName).!.map(PropertyKeyName)
 
   val integerLiteral: P[IntegerLiteral] = P(
     hexInteger.!.map(h => java.lang.Long.parseLong(h.drop(2), 16))
@@ -661,15 +661,15 @@ object CypherParser {
     | K("ANY")
     | K("NONE")
     | K("SINGLE")
-  ).log()
+  )
 
-  val unescapedSymbolicName: P[Unit] = P(identifierPart.rep(min = 1)).log()
+  val unescapedSymbolicName: P[Unit] = P(identifierPart.rep(min = 1))
 
   // TODO: Constrain
   val identifierStart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z'))
 
   // TODO: Constrain
-  val identifierPart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z','0' to '9')).log()
+  val identifierPart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z','0' to '9'))
 
   //     * Any character except "`", enclosed within `backticks`. Backticks are escaped with double backticks. */
   val escapedSymbolicName: P[Unit] = P(("`" ~ escapedSymbolicName0.rep ~ "`").rep(min = 1))

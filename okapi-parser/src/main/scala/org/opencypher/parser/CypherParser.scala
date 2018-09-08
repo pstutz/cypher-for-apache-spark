@@ -1,10 +1,35 @@
 package org.opencypher.parser
 
 import cats.data.NonEmptyList
+import fastparse.core.Parsed
+import fastparse.core.Parsed.{Failure, Success}
 import fastparse.{WhitespaceApi, parsers}
+import org.opencypher.okapi.api.value.CypherValue.CypherValue
 
 //noinspection ForwardReference
-object CypherFastparse {
+object CypherParser {
+
+  def parse(query: String, parameters: Map[String, CypherValue] = Map.empty): CypherAst = {
+    val parseResult = CypherParser.cypher.parse(query)
+    val ast = parseResult match {
+      case Success(v, _) =>
+        println(query)
+        v
+      case f@Failure(p, index, extra) =>
+        println(query)
+        val i = extra.input
+        val before = index - math.max(index - 20, 0)
+        val after = math.min(index + 20, i.length) - index
+        println(extra.input.slice(index - before, index + after).replace('\n', ' '))
+        println("~" * before + "^" + "~" * after)
+        println(s"failed parser: $p at index $index")
+        println(s"stack=${extra.traced.stack}")
+        println(extra.traced.trace)
+        throw new Exception(f.toString)
+    }
+    ast.show()
+    ast
+  }
 
   val White: WhitespaceApi.Wrapper = WhitespaceApi.Wrapper {
     import fastparse.all._
@@ -64,7 +89,7 @@ object CypherFastparse {
     def toBoolean: P[Boolean] = p.map(_.isDefined)
   }
 
-  def K(s: String): P[Unit] = P(parsers.Terminals.IgnoreCase(s) ~ &(" "))
+  def K(s: String): P[Unit] = P(parsers.Terminals.IgnoreCase(s)) //~ &(" ")
 
   val cypher: P[Cypher] = P(statement ~ "".? ~ End).map(Cypher)
 
@@ -98,23 +123,23 @@ object CypherFastparse {
       | returnClause
   )
 
-  val withClause: P[With] = P(K("WITH") ~ K("DISTINCT").!.?.toBoolean ~ returnBody ~ where.?).map(With.tupled)
+  val withClause: P[With] = P(K("WITH") ~/ K("DISTINCT").!.?.toBoolean ~/ returnBody ~ where.?).map(With.tupled)
 
-  val matchClause: P[Match] = P(K("OPTIONAL").!.?.toBoolean ~ K("MATCH") ~ pattern ~ where.?).map(Match.tupled)
+  val matchClause: P[Match] = P(K("OPTIONAL").!.?.toBoolean ~ K("MATCH") ~/ pattern ~ where.?).map(Match.tupled).log()
 
-  val unwind: P[Unwind] = P(K("UNWIND") ~ expression ~ K("AS") ~ variable).map(Unwind.tupled)
+  val unwind: P[Unwind] = P(K("UNWIND") ~/ expression ~ K("AS") ~ variable).map(Unwind.tupled)
 
-  val merge: P[Merge] = P(K("MERGE") ~ patternPart ~ mergeAction.rep.toList).map(Merge.tupled)
+  val merge: P[Merge] = P(K("MERGE") ~/ patternPart ~ mergeAction.rep.toList).map(Merge.tupled)
 
   val mergeAction: P[MergeAction] = P(onMatchMergeAction | onCreateMergeAction)
 
-  val onMatchMergeAction: P[OnMerge] = P(K("ON") ~ K("MATCH") ~ set).map(OnMerge)
+  val onMatchMergeAction: P[OnMerge] = P(K("ON") ~/ K("MATCH") ~/ set).map(OnMerge)
 
-  val onCreateMergeAction: P[OnCreate] = P(K("ON") ~ K("CREATE") ~ set).map(OnCreate)
+  val onCreateMergeAction: P[OnCreate] = P(K("ON") ~/ K("CREATE") ~/ set).map(OnCreate)
 
-  val create: P[Create] = P(K("CREATE") ~ pattern).map(Create)
+  val create: P[Create] = P(K("CREATE") ~/ pattern).map(Create)
 
-  val set: P[SetClause] = P(K("SET") ~ setItem.rep(min = 1).toNonEmptyList).map(SetClause)
+  val set: P[SetClause] = P(K("SET") ~/ setItem.rep(min = 1).toNonEmptyList).map(SetClause)
 
   val setItem: P[SetItem] = P(
     setProperty
@@ -132,10 +157,10 @@ object CypherFastparse {
   val setLabels: P[SetLabels] = P(variable ~ nodeLabel.rep(min = 1).toNonEmptyList).map(SetLabels.tupled)
 
   val delete: P[Delete] = P(
-    K("DETACH").!.?.toBoolean ~ K("DELETE") ~ expression.rep(min = 1).toNonEmptyList
+    K("DETACH").!.?.toBoolean ~ K("DELETE") ~/ expression.rep(min = 1).toNonEmptyList
   ).map(Delete.tupled)
 
-  val remove: P[Remove] = P(K("REMOVE") ~ removeItem.rep(min = 1).toNonEmptyList).map(Remove)
+  val remove: P[Remove] = P(K("REMOVE") ~/ removeItem.rep(min = 1).toNonEmptyList).map(Remove)
 
   val removeItem: P[RemoveItem] = P(removeNodeVariable | removeProperty)
 
@@ -143,7 +168,7 @@ object CypherFastparse {
     variable ~ nodeLabel.rep(min = 1).toNonEmptyList
   ).map(RemoveNodeVariable.tupled)
 
-  val removeProperty: P[PropertyExpression] = propertyExpression
+  val removeProperty: P[PropertyExpression] = P(propertyExpression)
 
   val inQueryCall: P[InQueryCall] = P(K("CALL") ~ explicitProcedureInvocation ~ yieldItems).map(InQueryCall.tupled)
 
@@ -154,7 +179,7 @@ object CypherFastparse {
   val procedureInvocation: P[ProcedureInvocation] = P(explicitProcedureInvocation | implicitProcedureInvocation)
 
   val yieldItems: P[List[YieldItem]] = P(
-    (K("YIELD") ~ (explicitYieldItems | noYieldItems)).?.map(_.getOrElse(Nil))
+    (K("YIELD") ~/ (explicitYieldItems | noYieldItems)).?.map(_.getOrElse(Nil))
   )
 
   val explicitYieldItems: P[List[YieldItem]] = P(yieldItem.rep(min = 1, sep = ",").toList)
@@ -163,7 +188,7 @@ object CypherFastparse {
 
   val yieldItem: P[YieldItem] = P((procedureResultField ~ K("AS")).? ~ variable).map(YieldItem.tupled)
 
-  val returnClause: P[Return] = P(K("RETURN") ~ K("DISTINCT").!.?.toBoolean ~ returnBody).map(Return.tupled)
+  val returnClause: P[Return] = P(K("RETURN") ~/ K("DISTINCT").!.?.toBoolean ~/ returnBody).map(Return.tupled)
 
   val returnBody: P[ReturnBody] = P(returnItems ~ orderBy.? ~ skip.? ~ limit.?).map(ReturnBody.tupled)
 
@@ -193,35 +218,35 @@ object CypherFastparse {
 
   val where: P[Where] = P(K("WHERE") ~ expression).map(Where)
 
-  val pattern: P[Pattern] = P(patternPart.rep(min = 1, sep = ",").toNonEmptyList).map(Pattern)
+  val pattern: P[Pattern] = P(patternPart.rep(min = 1, sep = ",").toNonEmptyList).map(Pattern).log()
 
-  val patternPart: P[PatternPart] = P((variable.? ~ "=" ~ patternElement).map(PatternPart.tupled))
+  val patternPart: P[PatternPart] = P((variable ~ "=").? ~ patternElement).map(PatternPart.tupled)
 
   val patternElement: P[PatternElement] = P(
     (nodePattern ~ patternElementChain.rep.toList).map(PatternElement.tupled)
       | "(" ~ patternElement ~ ")"
-  )
+  ).log()
 
   val nodePattern: P[NodePattern] = P(
     "(" ~ variable.? ~ nodeLabel.rep.toList ~ properties.? ~ ")"
-  ).map(NodePattern.tupled)
+  ).map(NodePattern.tupled).log()
 
   val patternElementChain: P[PatternElementChain] = P(relationshipPattern ~ nodePattern).map(PatternElementChain.tupled)
 
   val relationshipPattern: P[RelationshipPattern] = P(leftToRightPattern | rightToLeftPattern | undirectedPattern)
 
-  val leftToRightPattern: P[LeftToRight] = P(dash ~ relationshipDetail.? ~ dash ~ rightArrowHead).map(LeftToRight)
+  val leftToRightPattern: P[LeftToRight] = P(dash ~ relationshipDetail ~ dash ~ rightArrowHead).map(LeftToRight)
 
-  val rightToLeftPattern: P[RightToLeft] = P(leftArrowHead ~ dash ~ relationshipDetail.? ~ dash).map(RightToLeft)
+  val rightToLeftPattern: P[RightToLeft] = P(leftArrowHead ~ dash ~ relationshipDetail ~ dash).map(RightToLeft)
 
   val undirectedPattern: P[Undirected] = P(undirectedPatternWithArrowHeads | undirectedPatternWithoutArrowHeads)
 
   val undirectedPatternWithArrowHeads: P[Undirected] = P(
-    leftArrowHead ~ dash ~ relationshipDetail.? ~ dash ~ rightArrowHead
+    leftArrowHead ~ dash ~ relationshipDetail ~ dash ~ rightArrowHead
   ).map(Undirected)
 
   val undirectedPatternWithoutArrowHeads: P[Undirected] = P(
-    dash ~ relationshipDetail.? ~ dash
+    dash ~ relationshipDetail ~ dash
   ).map(Undirected)
 
   val relationshipDetail: P[RelationshipDetail] = P(
@@ -240,11 +265,11 @@ object CypherFastparse {
     "*" ~ (integerLiteral.? ~ (".." ~ integerLiteral).?)
   ).map(RangeLiteral.tupled)
 
-  val labelName: P[Unit] = schemaName
+  val labelName: P[Unit] = P(schemaName)
 
   val relTypeName: P[RelTypeName] = P(schemaName).!.map(RelTypeName)
 
-  val expression: P[Expression] = orExpression
+  val expression: P[Expression] = P(orExpression)
 
   val orExpression: P[Expression] = P(
     xorExpression ~ (K("OR") ~ xorExpression).rep
@@ -402,9 +427,12 @@ object CypherFastparse {
 
   val isNotNull: P[IsNotNull.type] = P(K("IS") ~ K("NOY") ~ K("NULL")).map(_ => IsNotNull)
 
-  val propertyOrLabelsExpression: P[PropertyOrLabelsExpression] = P(
+  val propertyOrLabelsExpression: P[Expression] = P(
     atom ~ propertyLookup.rep.toList ~ nodeLabel.rep.toList
-  ).map(PropertyOrLabelsExpression.tupled)
+  ).map { case (a, pls, nls) =>
+    if (pls.isEmpty && nls.isEmpty) a
+    else PropertyOrLabelsExpression(a, pls, nls)
+  }
 
   val atom: P[Atom] = P(
     literal
@@ -434,8 +462,23 @@ object CypherFastparse {
       | listLiteral
   )
 
-  // TODO: Fix
-  val stringLiteral: P[StringLiteral] = ???
+  val stringLiteral: P[StringLiteral] = {
+    val newline = P("\n" | "\r\n" | "\r" | "\f")
+    val escape = P("\\")
+    val stringLiteralChar = P((!("\"" | "'" | "\\" | newline) ~ AnyChar) | escape | ("\\" ~ newline))
+    val stringLiteral1 = P("\"" ~ stringLiteralChar.rep.! ~ "\"")
+    val stringLiteral2 = P("'" ~ stringLiteralChar.rep.! ~ "'")
+    P(stringLiteral1 | stringLiteral2).map(StringLiteral)
+  }
+
+
+  //  ( '"' ( StringLiteral_0 | EscapedChar )* '"' )
+  //  | ( '\'' ( StringLiteral_1 | EscapedChar )* '\'' )
+  //  ;
+  //
+  //  fragment StringLiteral_0 : [\u0000-!#-[\]-\uFFFF] ;
+  //
+  //  fragment StringLiteral_1 : [\u0000-&(-[\]-\uFFFF] ;
 
   val booleanLiteral: P[BooleanLiteral] = P(
     K("TRUE").!.map(_ => true)
@@ -496,7 +539,7 @@ object CypherFastparse {
     K("WHEN") ~ expression ~ K("THEN") ~ expression
   ).map(CaseAlternatives.tupled)
 
-  val variable: P[Variable] = P(symbolicName).!.map(Variable)
+  val variable: P[Variable] = P(symbolicName).!.map(Variable).log()
 
   val numberLiteral: P[NumberLiteral] = P(
     doubleLiteral
@@ -504,8 +547,8 @@ object CypherFastparse {
   )
 
   val mapLiteral: P[MapLiteral] = P(
-    "{" ~ (propertyKeyName ~ "=" ~ expression).rep(sep = ",") ~ "}"
-  ).map(_.toList).map(MapLiteral)
+    "{" ~/ (propertyKeyName ~ ":" ~/ expression).rep(sep = ",") ~ "}"
+  ).map(_.toList).map(MapLiteral).log()
 
   val parameter: P[Parameter] = P("$" ~ (symbolicName.!.map(SymbolicName) | indexParameter))
 
@@ -515,7 +558,7 @@ object CypherFastparse {
     atom ~ propertyLookup.rep(min = 1).toNonEmptyList
   ).map(PropertyExpression.tupled)
 
-  val propertyKeyName: P[PropertyKeyName] = P(schemaName).!.map(PropertyKeyName)
+  val propertyKeyName: P[PropertyKeyName] = P(schemaName).!.map(PropertyKeyName).log()
 
   val integerLiteral: P[IntegerLiteral] = P(
     hexInteger.!.map(h => java.lang.Long.parseLong(h.drop(2), 16))
@@ -547,9 +590,8 @@ object CypherFastparse {
   ).map(d => DoubleLiteral(d.toDouble))
 
   val exponentDecimalReal: P[Unit] = P(
-    digit.rep(min = 1)
-      | (digit.rep(min = 1) ~ "." ~ digit.rep(min = 1))
-      | ("." ~ digit.rep(min = 1) ~ CharIn("eE") ~ "-".? ~ digit.rep(min = 1))
+    (digit.rep(min = 1) | digit.rep(min = 1) ~ "." ~ digit.rep(min = 1))
+      ~ ("." ~ digit.rep(min = 1) ~ CharIn("eE") ~ "-".? ~ digit.rep(min = 1))
   )
 
   val regularDecimalReal: P[Unit] = P(digit.rep ~ "." ~ digit.rep(min = 1))
@@ -619,21 +661,21 @@ object CypherFastparse {
     | K("ANY")
     | K("NONE")
     | K("SINGLE")
-  )
+  ).log()
 
-  val unescapedSymbolicName: P[Unit] = P(identifierStart ~ identifierPart.rep(min = 1))
-
-  // TODO: Constrain
-  val identifierStart: P[Unit] = P(AnyChar)
+  val unescapedSymbolicName: P[Unit] = P(identifierPart.rep(min = 1)).log()
 
   // TODO: Constrain
-  val identifierPart: P[Unit] = P(AnyChar)
+  val identifierStart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z'))
+
+  // TODO: Constrain
+  val identifierPart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z','0' to '9')).log()
 
   //     * Any character except "`", enclosed within `backticks`. Backticks are escaped with double backticks. */
   val escapedSymbolicName: P[Unit] = P(("`" ~ escapedSymbolicName0.rep ~ "`").rep(min = 1))
 
   // TODO: Constrain
-  val escapedSymbolicName0: P[Unit] = P(AnyChar)
+  val escapedSymbolicName0: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z','0' to '9'))
 
   val leftArrowHead: P[Unit] = P(
     "<"

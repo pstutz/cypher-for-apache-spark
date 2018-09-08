@@ -85,13 +85,13 @@ case class StringListNullOperatorExpression(
 sealed trait OperatorExpression extends Expression
 
 sealed trait StringOperatorExpression extends OperatorExpression {
-  def propertyOrLabelsExpression: PropertyOrLabelsExpression
+  def expression: Expression
 }
 
-case class In(propertyOrLabelsExpression: PropertyOrLabelsExpression) extends StringOperatorExpression
-case class StartsWith(propertyOrLabelsExpression: PropertyOrLabelsExpression) extends StringOperatorExpression
-case class EndsWith(propertyOrLabelsExpression: PropertyOrLabelsExpression) extends StringOperatorExpression
-case class Contains(propertyOrLabelsExpression: PropertyOrLabelsExpression) extends StringOperatorExpression
+case class In(expression: Expression) extends StringOperatorExpression
+case class StartsWith(expression: Expression) extends StringOperatorExpression
+case class EndsWith(expression: Expression) extends StringOperatorExpression
+case class Contains(expression: Expression) extends StringOperatorExpression
 
 trait ListOperatorExpression extends OperatorExpression
 
@@ -127,15 +127,15 @@ case class CaseAlternatives(whenExpr: Expression, thenExpr: Expression) extends 
 
 sealed trait RelationshipPattern extends CypherAst {
 
-  def relationshipDetail: Option[RelationshipDetail]
+  def relationshipDetail: RelationshipDetail
 
 }
 
-case class LeftToRight(relationshipDetail: Option[RelationshipDetail]) extends RelationshipPattern
+case class LeftToRight(relationshipDetail: RelationshipDetail) extends RelationshipPattern
 
-case class RightToLeft(relationshipDetail: Option[RelationshipDetail]) extends RelationshipPattern
+case class RightToLeft(relationshipDetail: RelationshipDetail) extends RelationshipPattern
 
-case class Undirected(relationshipDetail: Option[RelationshipDetail]) extends RelationshipPattern
+case class Undirected(relationshipDetail: RelationshipDetail) extends RelationshipPattern
 
 case class With(distinct: Boolean, returnBody: ReturnBody, maybeWhere: Option[Where]) extends Clause
 

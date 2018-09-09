@@ -23,7 +23,8 @@ object CypherParser {
         println(extra.input.slice(index - before, index + after).replace('\n', ' '))
         println("~" * before + "^" + "~" * after)
         println(s"failed parser: $p at index $index")
-        println(s"stack=${extra.traced.stack}")
+        println(s"expected=${extra.traced.expected}")
+        println(s"stack=${extra.traced.fullStack}")
         println(extra.traced.trace)
         throw new Exception(f.toString)
     }
@@ -89,9 +90,9 @@ object CypherParser {
     def toBoolean: P[Boolean] = p.map(_.isDefined)
   }
 
-  def K(s: String): P[Unit] = P(parsers.Terminals.IgnoreCase(s)) //~ &(" ")
+  def K(s: String): P[Unit] = P(IgnoreCase(s) ~~ &(CharIn(" \t\n\r\f") | End))
 
-  val cypher: P[Cypher] = P(statement ~ "".? ~ End).map(Cypher)
+  val cypher: P[Cypher] = P(statement ~ ";".? ~ End).map(Cypher)
 
   val statement: P[Statement] = P(query)
 
@@ -108,7 +109,8 @@ object CypherParser {
     K("UNION") ~ K("ALL").!.?.toBoolean ~ singleQuery
   ).map { case (all, rhs) => lhs => Union(all, lhs, rhs) }
 
-  val singleQuery: P[SingleQuery] = P(clause.rep(min = 1).toNonEmptyList).map(SingleQuery)
+  val singleQuery: P[SingleQuery] = P(
+    clause ~/ clause.rep.toList).map { case (h, t) => SingleQuery(NonEmptyList.of[Clause](h, t: _*)) }
 
   val clause: P[Clause] = P(
     merge
@@ -127,7 +129,7 @@ object CypherParser {
 
   val matchClause: P[Match] = P(K("OPTIONAL").!.?.toBoolean ~ K("MATCH") ~/ pattern ~ where.?).map(Match.tupled)
 
-  val unwind: P[Unwind] = P(K("UNWIND") ~/ expression ~ K("AS") ~ variable).map(Unwind.tupled)
+  val unwind: P[Unwind] = P(K("UNWIND") ~/ expression ~ K("AS") ~/ variable).map(Unwind.tupled)
 
   val merge: P[Merge] = P(K("MERGE") ~/ patternPart ~ mergeAction.rep.toList).map(Merge.tupled)
 
@@ -190,18 +192,18 @@ object CypherParser {
 
   val returnClause: P[Return] = P(K("RETURN") ~/ K("DISTINCT").!.?.toBoolean ~/ returnBody).map(Return.tupled)
 
-  val returnBody: P[ReturnBody] = P(returnItems ~ orderBy.? ~ skip.? ~ limit.?).map(ReturnBody.tupled)
+  val returnBody: P[ReturnBody] = P(returnItems ~ orderBy.? ~ skip.? ~ limit.?).map(ReturnBody.tupled).log()
 
   val returnItems: P[ReturnItems] = P(
-    (K("*") ~ "," ~ returnItem.rep(sep = ",").toList).map(ReturnItems(true, _))
+    (K("*") ~/ "," ~ returnItem.rep(sep = ",").toList).map(ReturnItems(true, _))
       | returnItem.rep(min = 1, sep = ",").toList.map(ReturnItems(false, _))
-  )
+  ).log()
 
-  val returnItem: P[ReturnItem] = P(alias | expression)
+  val returnItem: P[ReturnItem] = P(alias | expression).log()
 
   val alias: P[Alias] = P(expression ~ K("AS") ~ variable).map(Alias.tupled)
 
-  val orderBy: P[OrderBy] = P(K("ORDER") ~ K("BY") ~ sortItem.rep(min = 1, sep = ",").toNonEmptyList).map(OrderBy)
+  val orderBy: P[OrderBy] = P(K("ORDER BY") ~/ sortItem.rep(min = 1, sep = ",").toNonEmptyList).map(OrderBy).log()
 
   val skip: P[Skip] = P(K("SKIP") ~ expression).map(Skip)
 
@@ -214,7 +216,7 @@ object CypherParser {
                    | K("DESCENDING").map(_ => Descending)
                    | K("DESC").map(_ => Descending)
                  ).?
-  ).map(SortItem.tupled)
+  ).map(SortItem.tupled).log()
 
   val where: P[Where] = P(K("WHERE") ~ expression).map(Where)
 
@@ -256,7 +258,7 @@ object CypherParser {
   val properties: P[Properties] = P(mapLiteral | parameter)
 
   val relationshipTypes: P[List[RelTypeName]] = P(
-    (":" ~ relTypeName).rep(min = 1, sep = "|").toList.?.map(_.getOrElse(Nil))
+    (":" ~ relTypeName.rep(min = 1, sep = "|" ~ ":".?)).toList.?.map(_.getOrElse(Nil))
   )
 
   val nodeLabel: P[NodeLabel] = P(":" ~ labelName.!).map(NodeLabel)
@@ -269,7 +271,7 @@ object CypherParser {
 
   val relTypeName: P[RelTypeName] = P(schemaName).!.map(RelTypeName)
 
-  val expression: P[Expression] = P(orExpression)
+  val expression: P[Expression] = P(orExpression).log()
 
   val orExpression: P[Expression] = P(
     xorExpression ~ (K("OR") ~ xorExpression).rep
@@ -327,7 +329,7 @@ object CypherParser {
 
   val partialLessThanOrEqualExpression: P[Expression] = P("<=" ~ addOrSubtractExpression)
 
-  val partialGreaterThanOrEqualExpression: P[Expression] = P(">-" ~ addOrSubtractExpression)
+  val partialGreaterThanOrEqualExpression: P[Expression] = P(">=" ~ addOrSubtractExpression)
 
   val addOrSubtractExpression: P[Expression] = P(
     multiplyDivideModuloExpression ~ (partialAddExpression | partialSubtractExpression).rep
@@ -539,7 +541,7 @@ object CypherParser {
     K("WHEN") ~ expression ~ K("THEN") ~ expression
   ).map(CaseAlternatives.tupled)
 
-  val variable: P[Variable] = P(symbolicName).!.map(Variable)
+  val variable: P[Variable] = P(symbolicName).!.map(Variable).log()
 
   val numberLiteral: P[NumberLiteral] = P(
     doubleLiteral
@@ -663,19 +665,19 @@ object CypherParser {
     | K("SINGLE")
   )
 
-  val unescapedSymbolicName: P[Unit] = P(identifierPart.rep(min = 1))
+  val unescapedSymbolicName: P[Unit] = P(identifierPart.repX(min = 1)).log()
 
   // TODO: Constrain
   val identifierStart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z'))
 
   // TODO: Constrain
-  val identifierPart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z','0' to '9'))
+  val identifierPart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z', '0' to '9'))
 
   //     * Any character except "`", enclosed within `backticks`. Backticks are escaped with double backticks. */
-  val escapedSymbolicName: P[Unit] = P(("`" ~ escapedSymbolicName0.rep ~ "`").rep(min = 1))
+  val escapedSymbolicName: P[Unit] = P(("`" ~ escapedSymbolicName0.rep ~ "`").repX(min = 1))
 
   // TODO: Constrain
-  val escapedSymbolicName0: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z','0' to '9'))
+  val escapedSymbolicName0: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z', '0' to '9'))
 
   val leftArrowHead: P[Unit] = P(
     "<"

@@ -159,7 +159,7 @@ object CypherParser {
   val setLabels: P[SetLabels] = P(variable ~ nodeLabel.rep(min = 1).toNonEmptyList).map(SetLabels.tupled)
 
   val delete: P[Delete] = P(
-    K("DETACH").!.?.toBoolean ~ K("DELETE") ~/ expression.rep(min = 1).toNonEmptyList
+    K("DETACH").!.?.toBoolean ~ K("DELETE") ~/ expression.rep(min = 1, sep = ",").toNonEmptyList
   ).map(Delete.tupled)
 
   val remove: P[Remove] = P(K("REMOVE") ~/ removeItem.rep(min = 1).toNonEmptyList).map(Remove)
@@ -192,18 +192,19 @@ object CypherParser {
 
   val returnClause: P[Return] = P(K("RETURN") ~/ K("DISTINCT").!.?.toBoolean ~/ returnBody).map(Return.tupled)
 
-  val returnBody: P[ReturnBody] = P(returnItems ~ orderBy.? ~ skip.? ~ limit.?).map(ReturnBody.tupled).log()
+  val returnBody: P[ReturnBody] = P(returnItems ~ orderBy.? ~ skip.? ~ limit.?).map(ReturnBody.tupled)
 
   val returnItems: P[ReturnItems] = P(
-    (K("*") ~/ "," ~ returnItem.rep(sep = ",").toList).map(ReturnItems(true, _))
+    ("*" ~/ ("," ~ returnItem.rep(min = 1, sep = ",").toList).?
+      .map(_.getOrElse(Nil))).map(ReturnItems(true, _))
       | returnItem.rep(min = 1, sep = ",").toList.map(ReturnItems(false, _))
-  ).log()
+  )
 
-  val returnItem: P[ReturnItem] = P(alias | expression).log()
+  val returnItem: P[ReturnItem] = P(alias | expression)
 
   val alias: P[Alias] = P(expression ~ K("AS") ~ variable).map(Alias.tupled)
 
-  val orderBy: P[OrderBy] = P(K("ORDER BY") ~/ sortItem.rep(min = 1, sep = ",").toNonEmptyList).map(OrderBy).log()
+  val orderBy: P[OrderBy] = P(K("ORDER BY") ~/ sortItem.rep(min = 1, sep = ",").toNonEmptyList).map(OrderBy)
 
   val skip: P[Skip] = P(K("SKIP") ~ expression).map(Skip)
 
@@ -216,7 +217,7 @@ object CypherParser {
                    | K("DESCENDING").map(_ => Descending)
                    | K("DESC").map(_ => Descending)
                  ).?
-  ).map(SortItem.tupled).log()
+  ).map(SortItem.tupled)
 
   val where: P[Where] = P(K("WHERE") ~ expression).map(Where)
 
@@ -271,7 +272,7 @@ object CypherParser {
 
   val relTypeName: P[RelTypeName] = P(schemaName).!.map(RelTypeName)
 
-  val expression: P[Expression] = P(orExpression).log()
+  val expression: P[Expression] = P(orExpression)
 
   val orExpression: P[Expression] = P(
     xorExpression ~ (K("OR") ~ xorExpression).rep
@@ -339,11 +340,11 @@ object CypherParser {
   }
 
   val partialAddExpression: P[Expression => Expression] = P(
-    "+" ~ multiplyDivideModuloExpression
+    "+" ~/ multiplyDivideModuloExpression
   ).map(rhs => (lhs: Expression) => AddExpression(lhs, rhs))
 
   val partialSubtractExpression: P[Expression => Expression] = P(
-    "+" ~ multiplyDivideModuloExpression
+    "-" ~/ multiplyDivideModuloExpression
   ).map(rhs => (lhs: Expression) => SubtractExpression(lhs, rhs))
 
   val multiplyDivideModuloExpression: P[Expression] = P(
@@ -404,9 +405,9 @@ object CypherParser {
 
   val in: P[In] = P(K("IN") ~ propertyOrLabelsExpression).map(In)
 
-  val startsWith: P[StartsWith] = P(K("STARTS") ~ K("WITH") ~ propertyOrLabelsExpression).map(StartsWith)
+  val startsWith: P[StartsWith] = P(K("STARTS WITH") ~ propertyOrLabelsExpression).map(StartsWith)
 
-  val endsWith: P[EndsWith] = P(K("ENDS") ~ K("WITH") ~ propertyOrLabelsExpression).map(EndsWith)
+  val endsWith: P[EndsWith] = P(K("ENDS WITH") ~ propertyOrLabelsExpression).map(EndsWith)
 
   val contains: P[Contains] = P(K("CONTAINS") ~ propertyOrLabelsExpression).map(Contains)
 
@@ -425,9 +426,10 @@ object CypherParser {
 
   val nullOperatorExpression: P[NullOperatorExpression] = P(isNull | isNotNull)
 
-  val isNull: P[IsNull.type] = P(K("IS") ~ K("NULL")).map(_ => IsNull)
+  val isNull: P[IsNull.type] = P(K("IS NULL")).map(_ => IsNull)
 
-  val isNotNull: P[IsNotNull.type] = P(K("IS") ~ K("NOY") ~ K("NULL")).map(_ => IsNotNull)
+  // TODO: Simplify
+  val isNotNull: P[IsNotNull.type] = P(K("IS NOT NULL")).map(_ => IsNotNull)
 
   val propertyOrLabelsExpression: P[Expression] = P(
     atom ~ propertyLookup.rep.toList ~ nodeLabel.rep.toList
@@ -440,15 +442,15 @@ object CypherParser {
     literal
       | parameter
       | caseExpression
-      | (K("COUNT") ~ "(" ~ "*" ~ ")").map(_ => CountStar)
+      | (IgnoreCase("COUNT") ~ "(" ~ "*" ~ ")").map(_ => CountStar)
       | listComprehension
       | patternComprehension
-      | (K("FILTER") ~ "(" ~ filterExpression ~ ")").map(Filter)
-      | (K("EXTRACT") ~ "(" ~ filterExpression ~ ("|" ~ expression).? ~ ")").map(Extract.tupled)
-      | (K("ALL") ~ "(" ~ filterExpression ~ ")").map(FilterAll)
-      | (K("ANY") ~ "(" ~ filterExpression ~ ")").map(FilterAny)
-      | (K("NONE") ~ "(" ~ filterExpression ~ ")").map(FilterNone)
-      | (K("SINGLE") ~ "(" ~ filterExpression ~ ")").map(FilterSingle)
+      | (IgnoreCase("FILTER") ~ "(" ~ filterExpression ~ ")").map(Filter)
+      | (IgnoreCase("EXTRACT") ~ "(" ~ filterExpression ~ ("|" ~ expression).? ~ ")").map(Extract.tupled)
+      | (IgnoreCase("ALL") ~ "(" ~ filterExpression ~ ")").map(FilterAll)
+      | (IgnoreCase("ANY") ~ "(" ~ filterExpression ~ ")").map(FilterAny)
+      | (IgnoreCase("NONE") ~ "(" ~ filterExpression ~ ")").map(FilterNone)
+      | (IgnoreCase("SINGLE") ~ "(" ~ filterExpression ~ ")").map(FilterSingle)
       | relationshipsPattern
       | parenthesizedExpression
       | functionInvocation
@@ -459,7 +461,7 @@ object CypherParser {
     numberLiteral
       | stringLiteral
       | booleanLiteral
-      | K("NULL").!.map(_ => NullLiteral)
+      | IgnoreCase("NULL").map(_ => NullLiteral)
       | mapLiteral
       | listLiteral
   )
@@ -483,8 +485,8 @@ object CypherParser {
   //  fragment StringLiteral_1 : [\u0000-&(-[\]-\uFFFF] ;
 
   val booleanLiteral: P[BooleanLiteral] = P(
-    K("TRUE").!.map(_ => true)
-      | K("FALSE").!.map(_ => false)
+    IgnoreCase("TRUE").map(_ => true)
+      | IgnoreCase("FALSE").map(_ => false)
   ).map(BooleanLiteral)
 
   val listLiteral: P[ListLiteral] = P("[" ~ expression.rep(sep = ",").toList ~ "]").map(ListLiteral)
@@ -541,7 +543,7 @@ object CypherParser {
     K("WHEN") ~ expression ~ K("THEN") ~ expression
   ).map(CaseAlternatives.tupled)
 
-  val variable: P[Variable] = P(symbolicName).!.map(Variable).log()
+  val variable: P[Variable] = P(symbolicName).!.map(Variable)
 
   val numberLiteral: P[NumberLiteral] = P(
     doubleLiteral
@@ -665,13 +667,13 @@ object CypherParser {
     | K("SINGLE")
   )
 
-  val unescapedSymbolicName: P[Unit] = P(identifierPart.repX(min = 1)).log()
+  val unescapedSymbolicName: P[Unit] = P(identifierPart.repX(min = 1))
 
   // TODO: Constrain
   val identifierStart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z'))
 
   // TODO: Constrain
-  val identifierPart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z', '0' to '9'))
+  val identifierPart: P[Unit] = P(CharIn('a' to 'z', 'A' to 'Z', '0' to '9', Seq('_')))
 
   //     * Any character except "`", enclosed within `backticks`. Backticks are escaped with double backticks. */
   val escapedSymbolicName: P[Unit] = P(("`" ~ escapedSymbolicName0.rep ~ "`").repX(min = 1))

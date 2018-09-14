@@ -195,7 +195,7 @@ sealed trait FunctionName extends CypherAst
 case object Exists extends FunctionName
 
 sealed trait PropertyLookup extends CypherAst {
-  def propertyKeyName: String
+  def value: String
 }
 
 case class StringLiteral(value: String) extends Literal
@@ -334,7 +334,7 @@ case class OnMerge(set: SetClause) extends MergeAction
 
 case class OnCreate(set: SetClause)  extends MergeAction
 
-case class PropertyKeyName(propertyKeyName: String) extends PropertyLookup
+case class PropertyKeyName(value: String) extends PropertyLookup
 
 case object CountStar extends Atom
 

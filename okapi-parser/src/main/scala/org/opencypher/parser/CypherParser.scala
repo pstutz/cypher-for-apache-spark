@@ -135,9 +135,11 @@ object CypherParser {
 
   val mergeAction: P[MergeAction] = P(onMatchMergeAction | onCreateMergeAction)
 
-  val onMatchMergeAction: P[OnMerge] = P(K("ON") ~/ K("MATCH") ~/ set).map(OnMerge)
+  // TODO: Optimize
+  val onMatchMergeAction: P[OnMerge] = P(K("ON") ~ K("MATCH") ~/ set).map(OnMerge)
 
-  val onCreateMergeAction: P[OnCreate] = P(K("ON") ~/ K("CREATE") ~/ set).map(OnCreate)
+  // TODO: Optimize
+  val onCreateMergeAction: P[OnCreate] = P(K("ON") ~ K("CREATE") ~/ set).map(OnCreate)
 
   val create: P[Create] = P(K("CREATE") ~/ pattern).map(Create)
 
@@ -234,26 +236,22 @@ object CypherParser {
     "(" ~ variable.? ~ nodeLabel.rep.toList ~ properties.? ~ ")"
   ).map(NodePattern.tupled)
 
-  val patternElementChain: P[PatternElementChain] = P(relationshipPattern ~ nodePattern).map(PatternElementChain.tupled)
+  val patternElementChain: P[PatternElementChain] = P(relationshipPattern ~/ nodePattern).map(PatternElementChain.tupled)
 
-  val relationshipPattern: P[RelationshipPattern] = P(leftToRightPattern | rightToLeftPattern | undirectedPattern)
+  val relationshipPattern: P[RelationshipPattern] = P(
+    hasLeftArrow ~/ relationshipDetail ~/ hasRightArrow
+  ).map {
+    case (false, detail, true) => LeftToRight(detail)
+    case (true, detail, false) => RightToLeft(detail)
+    case (_, detail, _) => Undirected(detail)
+  }
 
-  val leftToRightPattern: P[LeftToRight] = P(dash ~ relationshipDetail ~ dash ~ rightArrowHead).map(LeftToRight)
+  val hasLeftArrow: P[Boolean] = P(leftArrowHead.!.?.map(_.isDefined) ~ dash)
 
-  val rightToLeftPattern: P[RightToLeft] = P(leftArrowHead ~ dash ~ relationshipDetail ~ dash).map(RightToLeft)
-
-  val undirectedPattern: P[Undirected] = P(undirectedPatternWithArrowHeads | undirectedPatternWithoutArrowHeads)
-
-  val undirectedPatternWithArrowHeads: P[Undirected] = P(
-    leftArrowHead ~ dash ~ relationshipDetail ~ dash ~ rightArrowHead
-  ).map(Undirected)
-
-  val undirectedPatternWithoutArrowHeads: P[Undirected] = P(
-    dash ~ relationshipDetail ~ dash
-  ).map(Undirected)
+  val hasRightArrow: P[Boolean] = P(dash ~ rightArrowHead.!.?.map(_.isDefined))
 
   val relationshipDetail: P[RelationshipDetail] = P(
-    "[" ~ variable.? ~ relationshipTypes ~ rangeLiteral.? ~ properties.? ~ "]"
+    "[" ~/ variable.? ~ relationshipTypes ~ rangeLiteral.? ~ properties.? ~ "]"
   ).?.map(_.map(RelationshipDetail.tupled).getOrElse(RelationshipDetail(None, List.empty, None, None)))
 
   val properties: P[Properties] = P(mapLiteral | parameter)
@@ -265,7 +263,7 @@ object CypherParser {
   val nodeLabel: P[NodeLabel] = P(":" ~ labelName.!).map(NodeLabel)
 
   val rangeLiteral: P[RangeLiteral] = P(
-    "*" ~ (integerLiteral.? ~ (".." ~ integerLiteral).?)
+    "*" ~/ (integerLiteral.? ~ (".." ~ integerLiteral.?).?.map(_.flatten))
   ).map(RangeLiteral.tupled)
 
   val labelName: P[Unit] = P(schemaName)

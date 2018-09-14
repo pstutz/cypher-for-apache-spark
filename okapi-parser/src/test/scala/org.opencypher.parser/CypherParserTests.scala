@@ -5,7 +5,7 @@ import org.scalatest.{FunSpec, Matchers}
 class CypherParserTests extends FunSpec with Matchers {
 
   it("foo") {
-    CypherParser.parse("RETURN 1e-9")
+    CypherParser.parse("MATCH (a:A)\nMATCH (a)-[:LIKES*2..]->(c)\nRETURN c.name")
   }
 
 }

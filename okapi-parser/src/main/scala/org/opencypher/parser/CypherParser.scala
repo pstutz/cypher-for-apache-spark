@@ -1,10 +1,21 @@
 package org.opencypher.parser
 
+import java.lang.Character.UnicodeBlock
+
 import cats.data.NonEmptyList
-import fastparse.core.Parsed
+import fastparse.WhitespaceApi
+import fastparse.core.Frame
 import fastparse.core.Parsed.{Failure, Success}
-import fastparse.{WhitespaceApi, parsers}
+import org.opencypher.okapi.api.exception.CypherException
+import org.opencypher.okapi.api.exception.CypherException.ErrorPhase.CompileTime
+import org.opencypher.okapi.api.exception.CypherException.ErrorType.SyntaxError
+import org.opencypher.okapi.api.exception.CypherException._
 import org.opencypher.okapi.api.value.CypherValue.CypherValue
+
+import scala.annotation.tailrec
+
+case class ParsingException(override val detail: ErrorDetails)
+  extends CypherException(SyntaxError, CompileTime, detail)
 
 //noinspection ForwardReference
 object CypherParser {
@@ -22,10 +33,48 @@ object CypherParser {
         val after = math.min(index + 20, i.length) - index
         println(extra.input.slice(index - before, index + after).replace('\n', ' '))
         println("~" * before + "^" + "~" * after)
-        println(s"failed parser: $p at index $index")
-        println(s"expected=${extra.traced.expected}")
-        println(s"stack=${extra.traced.fullStack}")
-        println(extra.traced.trace)
+
+        val maybeNextCharacter = if (index < i.length) Some(i(index)) else None
+        maybeNextCharacter match {
+          case Some(c) if UnicodeBlock.of(c) != UnicodeBlock.BASIC_LATIN =>
+            throw ParsingException(InvalidUnicodeCharacter(s"'$c' is not a valid unicode character"))
+          case _ =>
+        }
+
+        val lastSuccessfulParse: Option[CypherAst] = {
+          @tailrec def lastChild(ast: CypherAst): CypherAst = {
+            if (ast.children.length == 0) ast else lastChild(ast.children.last)
+          }
+
+          statement.parseInput(i) match {
+            case Success(v, _) =>
+              val lastSuccess = lastChild(v)
+              lastSuccess.show()
+              Some(lastSuccess)
+            case _ => None
+          }
+        }
+
+        lastSuccessfulParse match {
+          case Some(_: NumberLiteral) if maybeNextCharacter.isDefined =>
+            throw ParsingException(InvalidNumberLiteral(
+              s"'${maybeNextCharacter.get}' is not a valid next character for a number literal"))
+          case _ =>
+        }
+
+        extra.traced.stack.last match {
+          case Frame(_, parser) if parser.toString == "relationshipDetail" && maybeNextCharacter.isDefined =>
+            throw ParsingException(InvalidRelationshipPattern(
+              s"'${maybeNextCharacter.get}' is not a valid part of a relationship pattern"))
+          case other =>
+            println(other)
+        }
+
+        println(s"Last named parser on stack=${extra.traced.stack.last}")
+        println(s"Failed parser: $p at index $index")
+        println(s"Expected=${extra.traced.expected}")
+        println(s"Stack=${extra.traced.stack}")
+        //println(extra.traced.trace)
         throw new Exception(f.toString)
     }
     ast.show()
@@ -109,8 +158,7 @@ object CypherParser {
     K("UNION") ~ K("ALL").!.?.toBoolean ~ singleQuery
   ).map { case (all, rhs) => lhs => Union(all, lhs, rhs) }
 
-  val singleQuery: P[SingleQuery] = P(
-    clause ~/ clause.rep.toList).map { case (h, t) => SingleQuery(NonEmptyList.of[Clause](h, t: _*)) }
+  val singleQuery: P[SingleQuery] = P(clause.rep(min = 1).toNonEmptyList).map(SingleQuery)
 
   val clause: P[Clause] = P(
     merge
@@ -141,7 +189,7 @@ object CypherParser {
   // TODO: Optimize
   val onCreateMergeAction: P[OnCreate] = P(K("ON") ~ K("CREATE") ~/ set).map(OnCreate)
 
-  val create: P[Create] = P(K("CREATE") ~/ pattern).map(Create)
+  val create: P[Create] = P(IgnoreCase("CREATE") ~/ pattern).map(Create)
 
   val set: P[SetClause] = P(K("SET") ~/ setItem.rep(min = 1).toNonEmptyList).map(SetClause)
 
@@ -164,7 +212,7 @@ object CypherParser {
     K("DETACH").!.?.toBoolean ~ K("DELETE") ~/ expression.rep(min = 1, sep = ",").toNonEmptyList
   ).map(Delete.tupled)
 
-  val remove: P[Remove] = P(K("REMOVE") ~/ removeItem.rep(min = 1).toNonEmptyList).map(Remove)
+  val remove: P[Remove] = P(K("REMOVE") ~/ removeItem.rep(min = 1, sep = ",").toNonEmptyList).map(Remove)
 
   val removeItem: P[RemoveItem] = P(removeNodeVariable | removeProperty)
 
@@ -202,9 +250,14 @@ object CypherParser {
       | returnItem.rep(min = 1, sep = ",").toList.map(ReturnItems(false, _))
   )
 
-  val returnItem: P[ReturnItem] = P(alias | expression)
+  val returnItem: P[ReturnItem] = P(
+    expression ~ alias.?
+  ).map {
+    case (e, None) => e
+    case (e, Some(a)) => a(e)
+  }
 
-  val alias: P[Alias] = P(expression ~ K("AS") ~ variable).map(Alias.tupled)
+  val alias: P[Expression => Alias] = P(K("AS") ~ variable).map(v => e => Alias(e, v))
 
   val orderBy: P[OrderBy] = P(K("ORDER BY") ~/ sortItem.rep(min = 1, sep = ",").toNonEmptyList).map(OrderBy)
 
@@ -214,10 +267,10 @@ object CypherParser {
 
   val sortItem: P[SortItem] = P(
     expression ~ (
-                 K("ASCENDING").map(_ => Ascending)
-                   | K("ASC").map(_ => Ascending)
-                   | K("DESCENDING").map(_ => Descending)
-                   | K("DESC").map(_ => Descending)
+                 IgnoreCase("ASCENDING").map(_ => Ascending)
+                   | IgnoreCase("ASC").map(_ => Ascending)
+                   | IgnoreCase("DESCENDING").map(_ => Descending)
+                   | IgnoreCase("DESC").map(_ => Descending)
                  ).?
   ).map(SortItem.tupled)
 
@@ -236,10 +289,10 @@ object CypherParser {
     "(" ~ variable.? ~ nodeLabel.rep.toList ~ properties.? ~ ")"
   ).map(NodePattern.tupled)
 
-  val patternElementChain: P[PatternElementChain] = P(relationshipPattern ~/ nodePattern).map(PatternElementChain.tupled)
+  val patternElementChain: P[PatternElementChain] = P(relationshipPattern ~ nodePattern).map(PatternElementChain.tupled)
 
   val relationshipPattern: P[RelationshipPattern] = P(
-    hasLeftArrow ~/ relationshipDetail ~/ hasRightArrow
+    hasLeftArrow ~ relationshipDetail ~ hasRightArrow
   ).map {
     case (false, detail, true) => LeftToRight(detail)
     case (true, detail, false) => RightToLeft(detail)
@@ -251,7 +304,7 @@ object CypherParser {
   val hasRightArrow: P[Boolean] = P(dash ~ rightArrowHead.!.?.map(_.isDefined))
 
   val relationshipDetail: P[RelationshipDetail] = P(
-    "[" ~/ variable.? ~ relationshipTypes ~ rangeLiteral.? ~ properties.? ~ "]"
+    "[" ~ variable.? ~ relationshipTypes ~ rangeLiteral.? ~ properties.? ~ "]"
   ).?.map(_.map(RelationshipDetail.tupled).getOrElse(RelationshipDetail(None, List.empty, None, None)))
 
   val properties: P[Properties] = P(mapLiteral | parameter)
@@ -263,7 +316,7 @@ object CypherParser {
   val nodeLabel: P[NodeLabel] = P(":" ~ labelName.!).map(NodeLabel)
 
   val rangeLiteral: P[RangeLiteral] = P(
-    "*" ~/ (integerLiteral.? ~ (".." ~ integerLiteral.?).?.map(_.flatten))
+    "*" ~/ integerLiteral.? ~ (".." ~ integerLiteral.?).?.map(_.flatten)
   ).map(RangeLiteral.tupled)
 
   val labelName: P[Unit] = P(schemaName)
@@ -338,11 +391,11 @@ object CypherParser {
   }
 
   val partialAddExpression: P[Expression => Expression] = P(
-    "+" ~/ multiplyDivideModuloExpression
+    "+" ~ multiplyDivideModuloExpression
   ).map(rhs => (lhs: Expression) => AddExpression(lhs, rhs))
 
   val partialSubtractExpression: P[Expression => Expression] = P(
-    "-" ~/ multiplyDivideModuloExpression
+    "-" ~ multiplyDivideModuloExpression
   ).map(rhs => (lhs: Expression) => SubtractExpression(lhs, rhs))
 
   val multiplyDivideModuloExpression: P[Expression] = P(
@@ -464,23 +517,24 @@ object CypherParser {
       | listLiteral
   )
 
-  val stringLiteral: P[StringLiteral] = {
-    val newline = P("\n" | "\r\n" | "\r" | "\f")
-    val escape = P("\\")
-    val stringLiteralChar = P((!("\"" | "'" | "\\" | newline) ~ AnyChar) | escape | ("\\" ~ newline))
-    val stringLiteral1 = P("\"" ~ stringLiteralChar.rep.! ~ "\"")
-    val stringLiteral2 = P("'" ~ stringLiteralChar.rep.! ~ "'")
-    P(stringLiteral1 | stringLiteral2).map(StringLiteral)
+  val stringLiteral: P[StringLiteral] = P(stringLiteral1 | stringLiteral2)
+
+  val newline: P[Unit] = P("\n" | "\r\n" | "\r" | "\f")
+
+  //TODO: Add unicode characters
+  val escapedChar: P[String] = P(
+    "\\" ~~ !(newline | hexDigit) ~~ AnyChar.!
+  )
+
+  // TODO: Make more efficient
+  def stringLiteralWithDelimiter(delimiter: String): P[StringLiteral] = P {
+    val stringLiteralChar: P[String] = P(escapedChar | !delimiter ~~ AnyChar.!)
+    P(delimiter ~~ stringLiteralChar.repX.map(_.mkString) ~~ delimiter).map(StringLiteral)
   }
 
+  val stringLiteral1: P[StringLiteral] = stringLiteralWithDelimiter("\"")
 
-  //  ( '"' ( StringLiteral_0 | EscapedChar )* '"' )
-  //  | ( '\'' ( StringLiteral_1 | EscapedChar )* '\'' )
-  //  ;
-  //
-  //  fragment StringLiteral_0 : [\u0000-!#-[\]-\uFFFF] ;
-  //
-  //  fragment StringLiteral_1 : [\u0000-&(-[\]-\uFFFF] ;
+  val stringLiteral2: P[StringLiteral] = stringLiteralWithDelimiter("\'")
 
   val booleanLiteral: P[BooleanLiteral] = P(
     IgnoreCase("TRUE").map(_ => true)
@@ -549,7 +603,7 @@ object CypherParser {
   )
 
   val mapLiteral: P[MapLiteral] = P(
-    "{" ~/ (propertyKeyName ~ ":" ~/ expression).rep(sep = ",") ~ "}"
+    "{" ~ (propertyKeyName ~ ":" ~ expression).rep(sep = ",") ~ "}"
   ).map(_.toList).map(MapLiteral)
 
   val parameter: P[Parameter] = P("$" ~ (symbolicName.!.map(SymbolicName) | indexParameter))
@@ -586,14 +640,24 @@ object CypherParser {
 
   val zeroDigit: P[Unit] = P("0")
 
+  // TODO: Simplify
   val doubleLiteral: P[DoubleLiteral] = P(
     exponentDecimalReal.!
       | regularDecimalReal.!
-  ).map(d => DoubleLiteral(d.toDouble))
+  ).map { d =>
+    val parsed = d.toDouble
+    if (parsed == Double.PositiveInfinity || parsed == Double.NegativeInfinity) {
+      throw ParsingException(FloatingPointOverflow(s"'$d' is too large to represent as a Java Double"))
+    } else {
+      DoubleLiteral(parsed)
+    }
+  }
 
   val exponentDecimalReal: P[Unit] = P(
-    (digit.rep(min = 1) | digit.rep(min = 1) ~ "." ~ digit.rep(min = 1))
-      ~ ("." ~ digit.rep(min = 1) ~ CharIn("eE") ~ "-".? ~ digit.rep(min = 1))
+    ((digit.rep(min = 1) ~ "." ~ digit.rep(min = 1))
+      | ("." ~ digit.rep(min = 1))
+      | digit.rep(min = 1)
+    ) ~ CharIn("eE") ~ "-".? ~ digit.rep(min = 1)
   )
 
   val regularDecimalReal: P[Unit] = P(digit.rep ~ "." ~ digit.rep(min = 1))

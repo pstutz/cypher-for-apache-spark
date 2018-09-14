@@ -170,4 +170,6 @@ object CypherException {
 
   case class ProcedureNotFound(message: String) extends ErrorDetails
 
+  case class InvalidUnicodeCharacter(message: String) extends ErrorDetails
+
 }

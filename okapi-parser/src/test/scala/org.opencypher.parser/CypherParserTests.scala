@@ -5,11 +5,11 @@ import org.scalatest.{FunSpec, Matchers}
 class CypherParserTests extends FunSpec with Matchers {
 
   it("query") {
-    CypherParser.parse("MATCH (a:A)\nMATCH (a)-[:LIKES*-2]->(c)\nRETURN c.name")
+    CypherParser.parse("MATCH (a:A), (b:B)\nWITH [p = (a)-[*]->(b) | p] AS paths, count(a) AS c\nRETURN paths, c")
   }
 
   it("individual parser") {
-    CypherParser.doubleLiteral.parse("1.34E999").get.value.show()
+    CypherParser.patternComprehension.parse("[p = (a)-[*]->(b) | p]").get.value.show()
   }
 
 }

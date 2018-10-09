@@ -493,9 +493,9 @@ object CypherParser {
     literal
       | parameter
       | caseExpression
-      | (IgnoreCase("COUNT") ~ "(" ~ "*" ~ ")").map(_ => CountStar)
-      | listComprehension
       | patternComprehension
+      | listComprehension
+      | (IgnoreCase("COUNT") ~ "(" ~ "*" ~ ")").map(_ => CountStar)
       | (IgnoreCase("FILTER") ~ "(" ~ filterExpression ~ ")").map(Filter)
       | (IgnoreCase("EXTRACT") ~ "(" ~ filterExpression ~ ("|" ~ expression).? ~ ")").map(Extract.tupled)
       | (IgnoreCase("ALL") ~ "(" ~ filterExpression ~ ")").map(FilterAll)

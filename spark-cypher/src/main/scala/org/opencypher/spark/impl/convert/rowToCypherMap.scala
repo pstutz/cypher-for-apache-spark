@@ -36,6 +36,8 @@ import org.opencypher.okapi.ir.api.expr.{Expr, ListSegment, Var}
 import org.opencypher.okapi.relational.impl.table.RecordHeader
 import org.opencypher.spark.api.value.{CAPSNode, CAPSRelationship}
 
+import scala.collection.mutable
+
 // TODO: argument cannot be a Map due to Scala issue https://issues.scala-lang.org/browse/SI-7005
 final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row => CypherMap) {
 
@@ -88,7 +90,7 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
     val idValue = row.getAs[Any](header.column(v))
     idValue match {
       case null => CypherNull
-      case id: Array[Long] =>
+      case id: mutable.WrappedArray[_] =>
 
         val labels = header
           .labelsFor(v)
@@ -101,8 +103,8 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
           .collect { case (key, value) if !value.isNull => key -> value }
           .toMap
 
-        CAPSNode(id.toList, labels, properties)
-      case invalidID => throw UnsupportedOperationException(s"CAPSNode ID has to be a Long instead of ${invalidID.getClass}")
+        CAPSNode(id.toList.asInstanceOf[List[Long]], labels, properties)
+      case invalidID => throw UnsupportedOperationException(s"CAPSNode ID has to be an Array[Long] instead of ${invalidID.getClass}")
     }
   }
 
@@ -110,9 +112,9 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
     val idValue = row.getAs[Any](header.column(v))
     idValue match {
       case null => CypherNull
-      case id: Array[Long] =>
-        val source = row.getAs[Array[Long]](header.column(header.startNodeFor(v))).toList
-        val target = row.getAs[Array[Long]](header.column(header.endNodeFor(v))).toList
+      case id: mutable.WrappedArray[_] =>
+        val source = row.getAs[mutable.WrappedArray[Long]](header.column(header.startNodeFor(v))).toList
+        val target = row.getAs[mutable.WrappedArray[Long]](header.column(header.endNodeFor(v))).toList
 
         val relType = header
           .typesFor(v)
@@ -126,7 +128,7 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
           .collect { case (key, value) if !value.isNull => key -> value }
           .toMap
 
-        CAPSRelationship(id.toList, source, target, relType, properties)
+        CAPSRelationship(id.toList.asInstanceOf[List[Long]], source, target, relType, properties)
       case invalidID => throw UnsupportedOperationException(s"CAPSRelationship ID has to be a Long instead of ${invalidID.getClass}")
     }
   }

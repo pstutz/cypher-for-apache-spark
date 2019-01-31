@@ -56,16 +56,16 @@ class CAPSSessionImplTest extends CAPSTestSuite with TeamDataFixture with GraphC
     val r4 = caps.cypher("FROM GRAPH foo.bar.baz.a MATCH (n) RETURN n")
 
     r1.records.collect.toBag should equal(Bag(
-      CypherMap("n" -> CAPSNode(0L, Set("A")))
+      CypherMap("n" -> CAPSNode(0L, Set("A"), CypherMap.empty))
     ))
     r2.records.collect.toBag should equal(Bag(
-      CypherMap("n" -> CAPSNode(0L, Set("B")))
+      CypherMap("n" -> CAPSNode(0L, Set("B"), CypherMap.empty))
     ))
     r3.records.collect.toBag should equal(Bag(
-      CypherMap("n" -> CAPSNode(0L, Set("B")))
+      CypherMap("n" -> CAPSNode(0L, Set("B"), CypherMap.empty))
     ))
     r4.records.collect.toBag should equal(Bag(
-      CypherMap("n" -> CAPSNode(0L, Set("C")))
+      CypherMap("n" -> CAPSNode(0L, Set("C"), CypherMap.empty))
     ))
   }
 

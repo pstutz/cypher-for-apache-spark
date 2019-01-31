@@ -88,7 +88,7 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
     val idValue = row.getAs[Any](header.column(v))
     idValue match {
       case null => CypherNull
-      case id: Long =>
+      case id: Array[Long] =>
 
         val labels = header
           .labelsFor(v)
@@ -101,7 +101,7 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
           .collect { case (key, value) if !value.isNull => key -> value }
           .toMap
 
-        CAPSNode(id, labels, properties)
+        CAPSNode(id.toList, labels, properties)
       case invalidID => throw UnsupportedOperationException(s"CAPSNode ID has to be a Long instead of ${invalidID.getClass}")
     }
   }
@@ -110,9 +110,9 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
     val idValue = row.getAs[Any](header.column(v))
     idValue match {
       case null => CypherNull
-      case id: Long =>
-        val source = row.getAs[Long](header.column(header.startNodeFor(v)))
-        val target = row.getAs[Long](header.column(header.endNodeFor(v)))
+      case id: Array[Long] =>
+        val source = row.getAs[Array[Long]](header.column(header.startNodeFor(v))).toList
+        val target = row.getAs[Array[Long]](header.column(header.endNodeFor(v))).toList
 
         val relType = header
           .typesFor(v)
@@ -126,7 +126,7 @@ final case class rowToCypherMap(exprToColumn: Seq[(Expr, String)]) extends (Row 
           .collect { case (key, value) if !value.isNull => key -> value }
           .toMap
 
-        CAPSRelationship(id, source, target, relType, properties)
+        CAPSRelationship(id.toList, source, target, relType, properties)
       case invalidID => throw UnsupportedOperationException(s"CAPSRelationship ID has to be a Long instead of ${invalidID.getClass}")
     }
   }

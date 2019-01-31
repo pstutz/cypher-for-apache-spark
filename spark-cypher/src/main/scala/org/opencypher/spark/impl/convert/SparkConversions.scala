@@ -64,8 +64,8 @@ object SparkConversions {
           case CTFloat => Some(DoubleType)
           case CTLocalDateTime => Some(TimestampType)
           case CTDate => Some(DateType)
-          case _: CTNode => Some(LongType)
-          case _: CTRelationship => Some(LongType)
+          case _: CTNode => Some(ArrayType(LongType, containsNull = false))
+          case _: CTRelationship => Some(ArrayType(LongType, containsNull = false))
           case CTList(CTVoid) => Some(ArrayType(NullType, containsNull = true))
           case CTList(CTNull) => Some(ArrayType(NullType, containsNull = true))
           case CTList(elemType) =>
@@ -90,10 +90,10 @@ object SparkConversions {
     def toStructField(column: String): StructField = ct match {
       case CTVoid | CTNull => StructField(column, NullType, nullable = true)
 
-      case _: CTNode => StructField(column, LongType, nullable = false)
-      case _: CTNodeOrNull => StructField(column, LongType, nullable = true)
-      case _: CTRelationship => StructField(column, LongType, nullable = false)
-      case _: CTRelationshipOrNull => StructField(column, LongType, nullable = true)
+      case _: CTNode => StructField(column, ArrayType(LongType, containsNull = false), nullable = false)
+      case _: CTNodeOrNull => StructField(column, ArrayType(LongType, containsNull = false), nullable = true)
+      case _: CTRelationship => StructField(column, ArrayType(LongType, containsNull = false), nullable = false)
+      case _: CTRelationshipOrNull => StructField(column, ArrayType(LongType, containsNull = false), nullable = true)
 
       case CTInteger => StructField(column, LongType, nullable = false)
       case CTIntegerOrNull => StructField(column, LongType, nullable = true)

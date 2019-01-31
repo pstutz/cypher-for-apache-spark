@@ -539,8 +539,8 @@ class SqlPropertyGraphDataSourceTest extends CAPSTestSuite with HiveFixture with
     ))
 
     ds.graph(fooGraphName).relationships("r").toMapsWithCollectedEntities should equal(Bag(
-      CypherMap("r" -> CAPSRelationship(0, 0, 1, "KNOWS")),
-      CypherMap("r" -> CAPSRelationship(1, 1, 2, "KNOWS"))
+      CypherMap("r" -> CAPSRelationship(0, 0, 1, "KNOWS", CypherMap.empty)),
+      CypherMap("r" -> CAPSRelationship(1, 1, 2, "KNOWS", CypherMap.empty))
     ))
   }
 
@@ -576,8 +576,8 @@ class SqlPropertyGraphDataSourceTest extends CAPSTestSuite with HiveFixture with
     ))
 
     ds.graph(fooGraphName).relationships("r").toMapsWithCollectedEntities should equal(Bag(
-      CypherMap("r" -> CAPSRelationship(0, 0, 1, "KNOWS")),
-      CypherMap("r" -> CAPSRelationship(1, 1, 2, "KNOWS"))
+      CypherMap("r" -> CAPSRelationship(0, 0, 1, "KNOWS", CypherMap.empty)),
+      CypherMap("r" -> CAPSRelationship(1, 1, 2, "KNOWS", CypherMap.empty))
     ))
   }
 }

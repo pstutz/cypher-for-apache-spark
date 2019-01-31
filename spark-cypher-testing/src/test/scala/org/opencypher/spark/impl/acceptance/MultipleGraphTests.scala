@@ -715,7 +715,7 @@ class MultipleGraphTests extends CAPSTestSuite with ScanGraphInit {
     graph.schema should equal(Schema.empty.withNodePropertyKeys(Set.empty[String]))
     graph.asCaps.tags should equal(Set(0))
     graph.nodes("n").collect.toBag should equal(Bag(
-      CypherMap("n" -> CAPSNode(0))
+      CypherMap("n" -> CAPSNode(0, Set.empty[String]))
     ))
   }
 

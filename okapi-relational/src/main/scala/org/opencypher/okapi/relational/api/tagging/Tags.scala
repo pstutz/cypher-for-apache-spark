@@ -76,6 +76,27 @@ object Tags {
     }
   }
 
+  // TODO: Extend for longer arrays
+  implicit class LongListTagging(val l: List[Long]) extends AnyVal {
+
+    def setTag(tag: Int): List[Long] = {
+      assert(l.length == 1)
+      List((l.head & invertedTagMask) | (tag.toLong << idBits))
+    }
+
+    def getTag: Int = {
+      assert(l.length == 1)
+      // TODO: Verify that the tag actually fits into an Int or by requiring and checking a minimum size of 32 bits for idBits when reading it from config
+      ((l.head & tagMask) >>> idBits).toInt
+    }
+
+    def replaceTag(from: Int, to: Int): List[Long] = {
+      assert(l.length == 1)
+      if (l.getTag == from) l.setTag(to) else l
+    }
+
+  }
+
   implicit class LongTagging(val l: Long) extends AnyVal {
 
     def setTag(tag: Int): Long = {

@@ -127,8 +127,13 @@ object CAPSNodeTable {
     * @return a node table
     */
   def fromMapping(mapping: NodeMapping, initialTable: DataFrame): CAPSNodeTable = {
-    val colsToSelect = mapping.allSourceKeys
-    CAPSNodeTable(mapping, initialTable.select(colsToSelect.head, colsToSelect.tail: _*))
+    val idCols = mapping.idKeys.map { colName => functions.array(initialTable.col(colName)).as(colName) }
+
+    val remainingCols = mapping.allSourceKeys.filterNot(mapping.idKeys.contains).map(initialTable.col)
+
+    val colsToSelect = idCols ++ remainingCols
+
+    CAPSNodeTable(mapping, initialTable.select(colsToSelect: _*))
   }
 
   private def properties(nodeColumnNames: Seq[String]): Set[String] = {
@@ -219,9 +224,13 @@ object CAPSRelationshipTable {
       case _ => initialTable
     }
 
-    val colsToSelect = mapping.allSourceKeys
+    val idCols = mapping.idKeys.map { colName => functions.array(initialTable.col(colName)).as(colName) }
 
-    CAPSRelationshipTable(mapping, updatedTable.select(colsToSelect.head, colsToSelect.tail: _*))
+    val remainingCols = mapping.allSourceKeys.filterNot(mapping.idKeys.contains).map(initialTable.col)
+
+    val colsToSelect = idCols ++ remainingCols
+
+    CAPSRelationshipTable(mapping, initialTable.select(colsToSelect: _*))
   }
 
   private def properties(relColumnNames: Seq[String]): Set[String] = {

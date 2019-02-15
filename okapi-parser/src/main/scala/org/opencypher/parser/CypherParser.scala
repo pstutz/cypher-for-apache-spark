@@ -59,15 +59,8 @@ object CypherParser {
   def parseCypher9(query: String, parameters: Map[String, CypherValue] = Map.empty): CypherTree = {
     val parseResult = parse(query, cypherQueryEntireInput(_), verboseFailures = true)
     val ast = parseResult match {
-      case Success(v, _) =>
-        println(query)
-        println(
-          """|
-             |=>
-             |""".stripMargin)
-        v
+      case Success(v, _) => v
       case Failure(expected, index, extra) =>
-        println(query)
         val i = extra.input
         val before = index - math.max(index - 20, 0)
         val after = math.min(index + 20, i.length) - index
@@ -116,8 +109,7 @@ object CypherParser {
           case (parser, _) if parser == "relationshipDetail" && maybeNextCharacter.isDefined =>
             throw ParsingException(InvalidRelationshipPattern(
               s"'${maybeNextCharacter.get}' is not a valid part of a relationship pattern"))
-          case other =>
-            println(s"Last stack frame: $other")
+          case other => println(s"Last stack frame: $other")
         }
 
         println(s"Expected=$expected")
@@ -126,7 +118,6 @@ object CypherParser {
         println(s"Stack=${traced.stack}")
         throw new Exception(expected)
     }
-    ast.show()
     ast
   }
 

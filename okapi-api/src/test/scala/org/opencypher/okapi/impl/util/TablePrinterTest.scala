@@ -91,7 +91,7 @@ class TablePrinterTest extends ApiBaseTest {
 
   it("prints simple scala values") {
     val header = Seq("String", "Integer", "Float", "Boolean")
-    val data = Seq(Seq("foo", 42, 42.23, true))
+    val data = Seq(Seq[Any]("foo", 42, 42.23, true))
 
     toTable(header, data) should equal(
       """|╔════════╤═════════╤═══════╤═════════╗

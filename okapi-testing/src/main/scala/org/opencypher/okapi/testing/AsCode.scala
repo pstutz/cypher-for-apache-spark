@@ -49,7 +49,7 @@ object AsCode {
     anyAsCode(a)(specialMappings)
   }
 
-  private def anyAsCode(a: Any)(implicit specialMappings: PartialFunction[Any, String] = Map.empty): String = {
+  private def anyAsCode(a: Any)(implicit specialMappings: PartialFunction[Any, String]): String = {
     if (specialMappings.isDefinedAt(a)) specialMappings(a)
     else {
       a match {
@@ -70,8 +70,7 @@ object AsCode {
     }
   }
 
-  private def traversableAsCode(t: Traversable[_])(
-      implicit specialMappings: PartialFunction[Any, String] = Map.empty): String = {
+  private def traversableAsCode(t: Traversable[_])(implicit specialMappings: PartialFunction[Any, String]): String = {
     if (specialMappings.isDefinedAt(t)) specialMappings(t)
     else {
       val elementString = t.map(anyAsCode).mkString(", ")
@@ -90,7 +89,7 @@ object AsCode {
     }
   }
 
-  private def productAsCode(p: Product)(implicit specialMappings: PartialFunction[Any, String] = Map.empty): String = {
+  private def productAsCode(p: Product)(implicit specialMappings: PartialFunction[Any, String]): String = {
     if (specialMappings.isDefinedAt(p)) specialMappings(p)
     else {
       if (p.productIterator.isEmpty) {

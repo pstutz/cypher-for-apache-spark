@@ -34,7 +34,6 @@ import org.opencypher.okapi.ir.api.expr.PrefixId.GraphIdPrefix
 import org.opencypher.okapi.trees.AbstractTreeNode
 
 import scala.annotation.tailrec
-import scala.reflect.ClassTag
 
 object Expr {
 
@@ -192,8 +191,8 @@ object FlattenOps {
     /**
       * Flattens child expressions
       */
-    def flattenExprs[E <: Expr : ClassTag]: List[Expr] = {
-      @tailrec def flattenRec(es: List[Expr], result: Set[Expr] = Set.empty): Set[Expr] = {
+    def flattenExprs: List[Expr] = {
+      @tailrec def flattenRec(es: List[Expr], result: Set[Expr]): Set[Expr] = {
         es match {
           case Nil => result
           case h :: tail =>
@@ -212,13 +211,13 @@ object FlattenOps {
 
 object Ands {
 
-  def apply[E <: Expr](exprs: E*): Expr = exprs.flattenExprs[Ands] match {
+  def apply(exprs: E*): Expr = exprs.flattenExprs match {
     case Nil => TrueLit
     case one :: Nil => one
     case other => Ands(other)(CTBoolean)
   }
 
-  def apply[E <: Expr](exprs: Set[E]): Expr = apply(exprs.toSeq: _*)
+  def apply(exprs: Set[E]): Expr = apply(exprs.toSeq: _*)
 }
 
 final case class Ands(_exprs: List[Expr])(val cypherType: CypherType = CTBoolean) extends Expr {
@@ -232,13 +231,13 @@ final case class Ands(_exprs: List[Expr])(val cypherType: CypherType = CTBoolean
 
 object Ors {
 
-  def apply[E <: Expr](exprs: E*): Expr = exprs.flattenExprs[Ors] match {
+  def apply(exprs: E*): Expr = exprs.flattenExprs match {
     case Nil => TrueLit
     case one :: Nil => one
     case other => Ors(other)(CTBoolean)
   }
 
-  def apply[E <: Expr](exprs: Set[E]): Expr = apply(exprs.toSeq: _*)
+  def apply(exprs: Set[E]): Expr = apply(exprs.toSeq: _*)
 }
 
 final case class Ors(_exprs: List[Expr])(val cypherType: CypherType = CTBoolean) extends Expr {

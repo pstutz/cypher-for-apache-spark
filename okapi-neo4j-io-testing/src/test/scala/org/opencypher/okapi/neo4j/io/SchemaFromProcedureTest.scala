@@ -160,6 +160,7 @@ class SchemaFromProcedureTest extends BaseTestSuite with BeforeAndAfter with Bef
     schemaFor(s"CREATE (:A {p: $propertyValue})") should equal(
       Schema.empty.withNodePropertyKeys("A")("p" -> expectedType)
     )
+    ()
   }
 
   it("is not sensitive to creation order") {

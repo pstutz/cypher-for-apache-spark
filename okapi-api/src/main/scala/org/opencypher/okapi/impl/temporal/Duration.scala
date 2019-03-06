@@ -28,7 +28,6 @@ package org.opencypher.okapi.impl.temporal
 
 import java.time.temporal.ChronoUnit
 import java.util.Comparator
-import java.util.function.ToLongFunction
 
 import org.opencypher.okapi.api.value.CypherValue._
 import org.opencypher.okapi.impl.exception.IllegalArgumentException
@@ -75,12 +74,6 @@ class Duration protected(val months: Long = 0, val days: Long = 0, val seconds: 
     s"nanos = $nanos)"
 
   private lazy val COMPARATOR: Comparator[Duration] = {
-    import scala.language.implicitConversions
-
-    implicit def toLongFunction[T](f: T => Long): ToLongFunction[T] = new ToLongFunction[T] {
-      override def applyAsLong(t: T): Long = f(t)
-    }
-
     Comparator
       .comparingLong[Duration]((d: Duration) => d.averageLengthInSeconds)
       .thenComparingLong((d: Duration) => d.nanos)
@@ -92,7 +85,7 @@ class Duration protected(val months: Long = 0, val days: Long = 0, val seconds: 
 
 object Duration {
 
-  val SUPPORTED_KEYS = Set(
+  val SUPPORTED_KEYS: Set[String] = Set(
     "years",
     "months",
     "weeks",
@@ -124,11 +117,11 @@ object Duration {
   }
 
   def apply(javaDuration: java.time.Duration): Duration = {
-    Duration(seconds = javaDuration.getSeconds, nanoseconds = javaDuration.getNano)
+    Duration(seconds = javaDuration.getSeconds, nanoseconds = javaDuration.getNano.toLong)
   }
 
   def apply(period: java.time.Period): Duration = {
-    Duration(months = period.getYears * 12 + period.getMonths, days = period.getDays)
+    Duration(months = period.getYears.toLong * 12 + period.getMonths, days = period.getDays.toLong)
   }
 
   def apply(map: Map[String, Long]): Duration = {

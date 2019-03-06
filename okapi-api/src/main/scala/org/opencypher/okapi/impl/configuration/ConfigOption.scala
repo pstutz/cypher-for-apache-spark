@@ -30,7 +30,10 @@ import scala.util.Try
 
 abstract class ConfigOption[T](val name: String, val defaultValue: T)(val convert: String => Option[T]) {
 
-  def set(v: String): Unit = System.setProperty(name, v)
+  def set(v: String): Unit = {
+    System.setProperty(name, v)
+    ()
+  }
 
   def get: T = Option(System.getProperty(name)).flatMap(convert).getOrElse(defaultValue)
 

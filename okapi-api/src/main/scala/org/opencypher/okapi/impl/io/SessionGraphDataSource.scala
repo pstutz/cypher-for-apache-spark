@@ -53,7 +53,10 @@ class SessionGraphDataSource() extends PropertyGraphDataSource {
     case Some(_) => throw GraphAlreadyExistsException(s"A graph with name $name is already stored in the session.")
   }
 
-  override def delete(name: GraphName): Unit = graphMap.remove(name)
+  override def delete(name: GraphName): Unit = {
+    graphMap.remove(name)
+    ()
+  }
 
   override def graphNames: Set[GraphName] = graphMap.keySet.toSet
 

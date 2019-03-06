@@ -32,7 +32,6 @@ import org.opencypher.okapi.ApiBaseTest
 import org.opencypher.okapi.api.schema.LabelPropertyMap._
 import org.opencypher.okapi.api.types.CypherType.joinMonoid
 import org.opencypher.okapi.api.types.{CTAny, CTBoolean, CTInteger, CTString}
-import org.scalatest.{FunSpec, Matchers}
 
 class LabelPropertyMapTest extends ApiBaseTest {
 

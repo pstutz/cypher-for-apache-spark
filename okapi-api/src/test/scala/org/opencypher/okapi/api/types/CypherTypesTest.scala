@@ -30,8 +30,6 @@ import org.opencypher.okapi.ApiBaseTest
 import org.opencypher.okapi.api.graph.QualifiedGraphName
 import org.opencypher.okapi.impl.types.CypherTypeParser.parseCypherType
 
-import scala.language.postfixOps
-
 class CypherTypesTest extends ApiBaseTest {
 
   val materialTypes: Seq[MaterialCypherType] = Seq(

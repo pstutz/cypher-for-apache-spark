@@ -80,7 +80,7 @@ object StringEncodingUtilities {
             sb.append(charToEncode)
           } else {
             sb.append("@")
-            val hexString = charToEncode.toHexString
+            val hexString = charToEncode.toInt.toHexString
             // Pad left to max encoded length with '0's
             for (_ <- 0 until maxCharactersInHexStringEncoding - hexString.length) sb.append('0')
             sb.append(hexString)

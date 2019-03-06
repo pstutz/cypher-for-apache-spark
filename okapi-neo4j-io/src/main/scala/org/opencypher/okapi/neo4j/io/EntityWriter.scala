@@ -70,7 +70,7 @@ object EntityWriter extends Logging {
          |$setStatements
          """.stripMargin
 
-    writeEntities(nodes, rowMapping, createQ, config, batchSize)(rowToListValue)
+    writeEntities(nodes, createQ, config, batchSize)(rowToListValue)
   }
 
   // TODO: Share more code with `createRelationships`
@@ -109,7 +109,7 @@ object EntityWriter extends Logging {
          |$setStatements
          """.stripMargin
 
-    writeEntities(relationships, rowMapping, createQ, config, batchSize)(rowToListValue)
+    writeEntities(relationships, createQ, config, batchSize)(rowToListValue)
   }
 
   def createNodes[T](
@@ -134,7 +134,7 @@ object EntityWriter extends Logging {
          |$setStatements
          """.stripMargin
 
-    writeEntities(nodes, rowMapping, createQ, config, batchSize)(rowToListValue)
+    writeEntities(nodes, createQ, config, batchSize)(rowToListValue)
   }
 
   def createRelationships[T](
@@ -164,15 +164,14 @@ object EntityWriter extends Logging {
          |$setStatements
          """.stripMargin
 
-    writeEntities(relationships, rowMapping, createQ, config, batchSize)(rowToListValue)
+    writeEntities(relationships, createQ, config, batchSize)(rowToListValue)
   }
 
   private def writeEntities[T](
     entities: Iterator[T],
-    rowMapping: Array[String],
     query: String,
     config: Neo4jConfig,
-    batchSize: Int = 1000
+    batchSize: Int
   )(rowToListValue: T => Value): Unit = {
     val reuseMap = new java.util.HashMap[String, Value]
     val reuseParameters = new MapValue(reuseMap)
@@ -195,6 +194,7 @@ object EntityWriter extends Logging {
               override def execute(transaction: Transaction): Unit = {
                 logger.debug(s"Executing query: $reuseStatement")
                 transaction.run(reuseStatement).consume()
+                ()
               }
             }
           }

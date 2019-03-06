@@ -99,7 +99,10 @@ abstract class TreeNode[T <: TreeNode[T]] extends Product with Traversable[T] {
     f(node).withNewChildren(transformedChildren.toArray)
   }
 
-  override def foreach[O](f: T => O): Unit = transform[O] { case (node, _) => f(node) }
+  override def foreach[O](f: T => O): Unit = transform[Unit] { case (node, _) =>
+    f(node)
+    ()
+  }
 
   /**
     * Checks if the parameter tree is contained within this tree. A tree always contains itself.
@@ -182,6 +185,7 @@ abstract class TreeNode[T <: TreeNode[T]] extends Product with Traversable[T] {
       .map(fieldMirror => fieldMirror -> fieldMirror.get)
       .filter { case (fieldMirror, value) =>
         def containsChildren: Boolean = fieldMirror.symbol.typeSignature.typeArgs.head <:< treeType
+
         value match {
           case c: T if containsChild(c) => false
           case _: Option[_] if containsChildren => false

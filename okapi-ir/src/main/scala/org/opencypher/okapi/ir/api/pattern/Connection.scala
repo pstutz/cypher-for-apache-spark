@@ -32,8 +32,6 @@ import org.opencypher.okapi.api.types.CTRelationship
 import org.opencypher.okapi.ir.api._
 import org.opencypher.okapi.ir.api.pattern.Orientation.{Cyclic, Directed, Undirected}
 
-import scala.language.higherKinds
-
 sealed trait Connection {
   type O <: Orientation[E]
   type E <: Endpoints

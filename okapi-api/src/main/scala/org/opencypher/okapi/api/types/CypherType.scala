@@ -35,8 +35,6 @@ import org.opencypher.okapi.api.value.CypherValue._
 import org.opencypher.okapi.impl.types.CypherTypeParser
 import upickle.default._
 
-import scala.language.postfixOps
-
 object CypherType {
 
   implicit def rw: ReadWriter[CypherType] = readwriter[String].bimap[CypherType](_.name, s => fromName(s).get)
@@ -231,7 +229,6 @@ sealed case class CTNode(
     case _ => super.meetMaterially(other)
   }
 
-  override def withGraph(qgn: QualifiedGraphName): CypherType = copy(graph = Some(qgn))
   override def withoutGraph: CypherType = copy(graph = None)
 }
 
@@ -308,7 +305,6 @@ sealed case class CTRelationship(
       super.meetMaterially(other)
   }
 
-  override def withGraph(qgn: QualifiedGraphName): CypherType = copy(graph = Some(qgn))
   override def withoutGraph: CypherType = copy(graph = None)
 }
 
@@ -339,8 +335,6 @@ final case class CTList(elementType: CypherType) extends MaterialDefiniteCypherT
   self =>
 
   override def graph: Option[QualifiedGraphName] = elementType.graph
-
-  override def withGraph(qgn: QualifiedGraphName): CypherType = copy(elementType = elementType.withGraph(qgn))
 
   override def name = s"LIST($elementType)"
 
@@ -412,8 +406,6 @@ sealed trait CypherType extends Serializable {
   def isNullable: Boolean
 
   def graph: Option[QualifiedGraphName] = None
-
-  def withGraph(qgn: QualifiedGraphName): CypherType = this
 
   def withoutGraph: CypherType = this
 

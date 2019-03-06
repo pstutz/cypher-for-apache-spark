@@ -145,6 +145,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
     result.records.iterator.toBag should equal(
       expectedRecords.toBag
     )
+    ()
   }
 
   val cypher10Scenarios: List[Scenario] = {
@@ -153,22 +154,26 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
         registerPgds(ns)
         session.catalog.source(ns).hasGraph(g1) shouldBe true
         session.catalog.source(ns).hasGraph(GraphName("foo")) shouldBe false
+        ()
       },
 
       Scenario("API: PropertyGraphDataSource.hasGraph", g1) { implicit ctx: TestContext =>
         registerPgds(ns)
         session.catalog.source(ns).hasGraph(g1) shouldBe true
         session.catalog.source(ns).hasGraph(GraphName("foo")) shouldBe false
+        ()
       },
 
       Scenario("API: PropertyGraphDataSource.graphNames", g1) { implicit ctx: TestContext =>
         registerPgds(ns)
         session.catalog.source(ns).graphNames should contain(g1)
+        ()
       },
 
       Scenario("API: PropertyGraphDataSource.graph", g1) { implicit ctx: TestContext =>
         registerPgds(ns)
         session.catalog.source(ns).graph(g1)
+        ()
       },
 
       Scenario("API: Correct schema for graph #1", g1) { implicit ctx: TestContext =>
@@ -187,13 +192,14 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
         val schema = session.catalog.source(ns).schema(g1).getOrElse(session.catalog.source(ns).graph(g1).schema)
         schema.labelPropertyMap should equal(expectedSchema.labelPropertyMap)
         schema.relTypePropertyMap should equal(expectedSchema.relTypePropertyMap)
+        ()
       },
 
       Scenario("API: PropertyGraphDataSource: correct node/rel count for graph #1", g1) { implicit ctx: TestContext =>
         registerPgds(ns)
         session.catalog.source(ns).graph(g1).nodes("n").size shouldBe 8
-        val r = session.catalog.source(ns).graph(g1).relationships("r")
         session.catalog.source(ns).graph(g1).relationships("r").size shouldBe 4
+        ()
       },
 
       Scenario("API: Cypher query directly on graph #1", g1) { implicit ctx: TestContext =>
@@ -204,6 +210,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
           CypherMap("a.name" -> "COMBO2"),
           CypherMap("a.name" -> "AC")
         ))
+        ()
       },
 
       Scenario("Cypher query on session", g1) { implicit ctx: TestContext =>
@@ -215,6 +222,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
           CypherMap("b.type" -> "AB1", "b.size" -> 2),
           CypherMap("b.type" -> "AB2", "b.size" -> CypherNull)
         )
+        ()
       },
 
       Scenario("Scans over multiple labels", g1) { implicit ctx: TestContext =>
@@ -230,6 +238,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
           CypherMap("n.name" -> CypherNull, "n.size" -> CypherNull),
           CypherMap("n.name" -> "D", "n.size" -> CypherNull)
         )
+        ()
       },
 
       Scenario("Multi-hop paths", g1) { implicit ctx: TestContext =>
@@ -239,6 +248,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
           CypherMap("r1.since" -> 2004, "r2.since" -> 2005, "type(r2)" -> "R"),
           CypherMap("r1.since" -> 2005, "r2.since" -> 2006, "type(r2)" -> "S")
         )
+        ()
       },
 
       Scenario("Initialize with a graph", g1) { implicit ctx: TestContext =>
@@ -254,6 +264,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
             a[GraphAlreadyExistsException] shouldBe thrownBy {
               session.cypher(s"CATALOG CREATE GRAPH $ns.$g1 { RETURN GRAPH }")
             }
+            ()
           case Failure(_: UnsupportedOperationException) =>
           case Failure(t) => throw t
         }
@@ -280,6 +291,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
               CypherMap("c.name" -> "AC"),
               CypherMap("c.name" -> "new")
             ))
+            ()
           case Failure(_: UnsupportedOperationException) =>
           case Failure(t) => throw t
         }
@@ -305,6 +317,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
             result should equal(Bag(
               CypherMap("d.no_label_node" -> true)
             ))
+            ()
           case Failure(_: UnsupportedOperationException) =>
           case Failure(t) => throw t
         }
@@ -330,6 +343,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
             result should equal(Bag(
               CypherMap("c.Āſ" -> "Āſ")
             ))
+            ()
           case Failure(_: UnsupportedOperationException) =>
           case Failure(t) => throw t
         }
@@ -354,6 +368,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
             result should equal(Bag(
               CypherMap("c.id" -> 100)
             ))
+            ()
           case Failure(_: UnsupportedOperationException) =>
           case Failure(t) => throw t
         }
@@ -381,6 +396,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
             withClue("`graph` needs to return graph with correct node size after storing a union graph") {
               session.catalog.source(ns).graph(unionGraphName).nodes("n").size shouldBe 2
             }
+            ()
           case Failure(_: UnsupportedOperationException) =>
           case Failure(t) => throw t
         }
@@ -418,6 +434,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
             session.catalog.source(ns).store(secondConstructedGraphName, secondConstructedGraph)
             val retrievedSecondConstructedGraph = session.catalog.source(ns).graph(secondConstructedGraphName)
             retrievedSecondConstructedGraph.nodes("n").size shouldBe 10
+            ()
         }
       },
 
@@ -428,6 +445,7 @@ trait PGDSAcceptanceTest[Session <: CypherSession, Graph <: PropertyGraph] {
             withClue("`hasGraph` needs to return `false` after graph deletion") {
               session.catalog.source(ns).hasGraph(g1) shouldBe false
             }
+            ()
           case Failure(_: UnsupportedOperationException) =>
           case Failure(t) => throw t
         }

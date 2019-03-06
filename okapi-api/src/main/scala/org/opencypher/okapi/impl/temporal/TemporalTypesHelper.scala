@@ -190,8 +190,8 @@ object TemporalTypesHelper {
       checkSignificanceOrder(sanitizedMap, dateByWeekIdentifiers)
 
       LocalDate.MIN
-        .`with`(IsoFields.WEEK_BASED_YEAR, sanitizedMap("year"))
-        .`with`(IsoFields.WEEK_OF_WEEK_BASED_YEAR, sanitizedMap("week"))
+        .`with`(IsoFields.WEEK_BASED_YEAR, sanitizedMap("year").toLong)
+        .`with`(IsoFields.WEEK_OF_WEEK_BASED_YEAR, sanitizedMap("week").toLong)
         .`with`(ChronoField.DAY_OF_WEEK, sanitizedMap.getOrElse("dayofweek", 1).toLong)
 
     } else if (sanitizedMap.keySet.contains("ordinalday")) {
@@ -204,7 +204,7 @@ object TemporalTypesHelper {
 
       LocalDate.MIN
         .withYear(sanitizedMap("year"))
-        .`with`(IsoFields.QUARTER_OF_YEAR, sanitizedMap("quarter"))
+        .`with`(IsoFields.QUARTER_OF_YEAR, sanitizedMap("quarter").toLong)
         .`with`(IsoFields.DAY_OF_QUARTER, sanitizedMap.getOrElse("dayofquarter", 1).toLong)
 
     }

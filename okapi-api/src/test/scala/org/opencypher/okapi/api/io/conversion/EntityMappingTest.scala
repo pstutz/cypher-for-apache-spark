@@ -112,5 +112,6 @@ class EntityMappingTest extends ApiBaseTest {
 
   private def raisesIllegalArgument[T](f: => T): Unit = {
     an[IllegalArgumentException] should be thrownBy f
+    ()
   }
 }

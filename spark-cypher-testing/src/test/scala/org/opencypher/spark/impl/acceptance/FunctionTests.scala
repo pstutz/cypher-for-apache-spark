@@ -27,17 +27,110 @@
 package org.opencypher.spark.impl.acceptance
 
 import org.junit.runner.RunWith
-import org.opencypher.okapi.api.value.CypherValue.{CypherList, CypherMap, CypherNull}
-import org.opencypher.okapi.impl.exception.NotImplementedException
+import org.opencypher.okapi.api.types._
+import org.opencypher.okapi.api.value.CypherValue.{CypherList, CypherMap, CypherNull, CypherNumber, CypherValueConverter, UnapplyValue}
+import org.opencypher.okapi.impl.exception.{IllegalArgumentException, NotImplementedException}
 import org.opencypher.okapi.testing.Bag
 import org.opencypher.okapi.testing.Bag._
 import org.opencypher.spark.api.value.CAPSEntity._
 import org.opencypher.spark.api.value.CAPSNode
+import org.opencypher.spark.impl.acceptance.BigDecimalModule.CypherBigDecimal.convert
 import org.opencypher.spark.testing.CAPSTestSuite
+import org.opencypher.v9_0.expressions.Literal
 import org.scalatest.junit.JUnitRunner
+
+import scala.util.Try
+
+object BigDecimalModule {
+
+  implicit val bigDecimalConverter: CypherValueConverter = (v: Any) => convert(v)
+
+  case object CTBigDecimal extends MaterialCypherType {
+
+    self =>
+
+    override def name = "BIGDECIMAL"
+
+    override def joinMaterially(other: MaterialCypherType): MaterialCypherType = other match {
+      case CTNumber => CTNumber
+      case CTInteger => self
+      case CTFloat => CTNumber
+      case CTVoid => self
+      case _ => CTAny
+    }
+
+    override val nullable: CTBigDecimalOrNull.type = CTBigDecimalOrNull
+
+    override def material: MaterialCypherType = this
+
+    override def superTypeOf(other: CypherType): Boolean = other == this
+
+  }
+
+  case object CTBigDecimalOrNull extends NullableCypherType {
+    override def name: String = CTBigDecimal + "?"
+
+    override def material: CTBigDecimal.type = CTBigDecimal
+
+    override def nullable: CTBigDecimalOrNull.type = this
+  }
+
+  case class CypherBigDecimal(value: BigDecimal) extends CypherNumber[BigDecimal] {
+
+    override val cypherType: CTBigDecimal.type = CTBigDecimal
+
+  }
+
+  object CypherBigDecimal extends UnapplyValue[BigDecimal, CypherBigDecimal] {
+
+    def convert(v: Any): Option[BigDecimalModule.CypherBigDecimal] = {
+      v match {
+        case ("bigdecimal", Seq(literal)) => {
+          literal match {
+            case l: Literal => Try(apply(l.value)).toOption
+            case _ => None
+          }
+        }
+        case _ => None
+      }
+    }
+
+    def apply(v: Any): CypherBigDecimal = {
+      v match {
+        case i: Int => CypherBigDecimal(BigDecimal(i))
+        case l: Long => CypherBigDecimal(BigDecimal(l))
+        case f: Float => CypherBigDecimal(BigDecimal(f.toDouble))
+        case d: Double => CypherBigDecimal(BigDecimal(d))
+        case s: String => CypherBigDecimal(BigDecimal(s))
+        case unsupported => throw IllegalArgumentException(s"Cannot convert `$unsupported` to a BigDecimal")
+      }
+    }
+
+  }
+
+}
 
 @RunWith(classOf[JUnitRunner])
 class FunctionTests extends CAPSTestSuite with ScanGraphInit {
+
+  it("can create nodes with big decimal property") {
+
+    implicit val customConverter: CypherValueConverter = BigDecimalModule.bigDecimalConverter
+
+    val graph = initGraph(
+      """
+        |CREATE ({val: bigdecimal('42')})
+        |CREATE ({val: bigdecimal(42)})
+        |CREATE ({val: bigdecimal('42.1')})
+        |CREATE ({val: bigdecimal(42.1)})
+        |CREATE ({val: bigdecimal(42.25)})
+        |CREATE ({val: bigdecimal(423)})
+      """.stripMargin)
+
+    //    graph.
+
+  }
+
 
   describe("Acos") {
     it("on int value") {
@@ -460,7 +553,7 @@ class FunctionTests extends CAPSTestSuite with ScanGraphInit {
       result.records.toMaps should equal(
         Bag(
           CypherMap("res" -> null)
-      )
+        )
       )
     }
     it("on null to-be-replaced") {

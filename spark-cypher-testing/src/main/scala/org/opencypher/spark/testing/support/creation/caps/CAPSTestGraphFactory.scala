@@ -27,6 +27,7 @@
 package org.opencypher.spark.testing.support.creation.caps
 
 import org.opencypher.okapi.api.graph.Pattern
+import org.opencypher.okapi.api.value.CypherValue.{CypherValueConverter, NoopCypherValueConverter}
 import org.opencypher.okapi.relational.api.graph.RelationalCypherGraph
 import org.opencypher.okapi.testing.propertygraph.{CreateGraphFactory, CypherTestGraphFactory}
 import org.opencypher.spark.api.CAPSSession
@@ -35,7 +36,7 @@ import org.opencypher.spark.impl.table.SparkTable.DataFrameTable
 
 trait CAPSTestGraphFactory extends CypherTestGraphFactory[CAPSSession] {
   def initGraph(createQuery: String, additionalPatterns: Seq[Pattern] = Seq.empty)
-    (implicit caps: CAPSSession): RelationalCypherGraph[DataFrameTable] = {
+    (implicit caps: CAPSSession, customConverter: CypherValueConverter = NoopCypherValueConverter): RelationalCypherGraph[DataFrameTable] = {
     apply(CreateGraphFactory(createQuery), additionalPatterns).asCaps
   }
 }

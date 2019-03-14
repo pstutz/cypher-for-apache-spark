@@ -27,6 +27,7 @@
 package org.opencypher.spark.impl.acceptance
 
 import org.opencypher.okapi.api.graph.Pattern
+import org.opencypher.okapi.api.value.CypherValue.{CypherValueConverter, NoopCypherValueConverter}
 import org.opencypher.okapi.relational.api.graph.RelationalCypherGraph
 import org.opencypher.spark.api.CAPSSession
 import org.opencypher.spark.impl.table.SparkTable.DataFrameTable
@@ -34,12 +35,14 @@ import org.opencypher.spark.testing.support.creation.caps.CAPSScanGraphFactory
 
 trait GraphInit {
   def initGraph(createQuery: String, additionalPatterns: Seq[Pattern] = Seq.empty)
-    (implicit caps: CAPSSession): RelationalCypherGraph[DataFrameTable]
+    (implicit caps: CAPSSession, customConverter: CypherValueConverter = NoopCypherValueConverter
+    ): RelationalCypherGraph[DataFrameTable]
 }
 
 trait ScanGraphInit extends GraphInit {
-  def initGraph(createQuery: String, additionalPatterns: Seq[Pattern] = Seq.empty)
-    (implicit caps: CAPSSession): RelationalCypherGraph[DataFrameTable] = {
+  override def initGraph(createQuery: String, additionalPatterns: Seq[Pattern] = Seq.empty)(
+    implicit caps: CAPSSession, customConverter: CypherValueConverter = NoopCypherValueConverter
+  ): RelationalCypherGraph[DataFrameTable] = {
     CAPSScanGraphFactory.initGraph(createQuery, additionalPatterns)
   }
 }

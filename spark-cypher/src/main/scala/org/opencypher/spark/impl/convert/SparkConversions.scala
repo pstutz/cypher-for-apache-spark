@@ -98,7 +98,8 @@ object SparkConversions {
 
     def getSparkType: DataType = toSparkType match {
       case Some(t) => t
-      case None => throw SparkSQLMappingException(s"Mapping of CypherType $ct to Spark type is unsupported")
+      case None => DecimalType(10, 0)
+        //throw SparkSQLMappingException(s"Mapping of CypherType $ct to Spark type is unsupported")
     }
 
     def isSparkCompatible: Boolean = toSparkType.isDefined

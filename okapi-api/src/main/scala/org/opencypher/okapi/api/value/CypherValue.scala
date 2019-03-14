@@ -28,7 +28,9 @@ package org.opencypher.okapi.api.value
 
 import java.util.Objects
 
+import org.opencypher.okapi.api.types._
 import org.opencypher.okapi.api.value.CypherValue.CypherEntity._
+import org.opencypher.okapi.api.value.CypherValue._
 import org.opencypher.okapi.api.value.CypherValue.CypherNode._
 import org.opencypher.okapi.api.value.CypherValue.CypherRelationship._
 import org.opencypher.okapi.impl.exception.{IllegalArgumentException, UnsupportedOperationException}
@@ -271,6 +273,23 @@ object CypherValue {
       }
     }
 
+    def cypherType: CypherType = {
+      value match {
+        case CypherNull => CTNull
+        case CypherBoolean(_) => CTBoolean
+        case CypherFloat(_) => CTFloat
+        case CypherInteger(_) => CTInteger
+        case CypherString(_) => CTString
+        case CypherLocalDateTime(_) => CTLocalDateTime
+        case CypherDate(_) => CTDate
+        case CypherDuration(_) => CTDuration
+        case CypherMap(inner) => CTMap(inner.mapValues(_.cypherType))
+        case CypherNode(_, labels, _) => CTNode(labels)
+        case CypherRelationship(_, _, _, relType, _) => CTRelationship(relType)
+        case CypherList(l) => CTList(l.map(_.cypherType).foldLeft[CypherType](CTVoid)(_.join(_)))
+      }
+    }
+
   }
 
   object CypherNull extends CypherValue {
@@ -322,7 +341,8 @@ object CypherValue {
   }
 
   object CypherMap extends UnapplyValue[Map[String, CypherValue], CypherMap] {
-    def apply(values: (String, Any)*)(implicit converter: CypherValueConverter = NoopCypherValueConverter): CypherMap = {
+    def apply(values: (String, Any)*)
+      (implicit converter: CypherValueConverter = NoopCypherValueConverter): CypherMap = {
       values.map { case (k, v) => k -> CypherValue(v) }.toMap
     }
 
@@ -458,7 +478,8 @@ object CypherValue {
       source: Id = startId,
       target: Id = endId,
       relType: String = relType,
-      properties: CypherMap = properties): I
+      properties: CypherMap = properties
+    ): I
 
     def withType(relType: String): I = {
       copy(relType = relType)

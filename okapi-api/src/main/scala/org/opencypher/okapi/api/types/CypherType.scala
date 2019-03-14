@@ -52,25 +52,6 @@ object CypherType {
    CypherTypeParser.parseCypherType(name)
   }
 
-  implicit class TypeCypherValue(cv: CypherValue) {
-    def cypherType: CypherType = {
-      cv match {
-        case CypherNull => CTNull
-        case CypherBoolean(_) => CTBoolean
-        case CypherFloat(_) => CTFloat
-        case CypherInteger(_) => CTInteger
-        case CypherString(_) => CTString
-        case CypherLocalDateTime(_) => CTLocalDateTime
-        case CypherDate(_) => CTDate
-        case CypherDuration(_) => CTDuration
-        case CypherMap(inner) => CTMap(inner.mapValues(_.cypherType))
-        case CypherNode(_, labels, _) => CTNode(labels)
-        case CypherRelationship(_, _, _, relType, _) => CTRelationship(relType)
-        case CypherList(l) => CTList(l.map(_.cypherType).foldLeft[CypherType](CTVoid)(_.join(_)))
-      }
-    }
-  }
-
   implicit val joinMonoid: Monoid[CypherType] = new Monoid[CypherType] {
     override def empty: CypherType = CTVoid
 
@@ -181,8 +162,8 @@ case class CTMap(innerTypes: Map[String, CypherType] = Map.empty[String, CypherT
   }
 }
 
-sealed trait TemporalValueCypherType extends MaterialDefiniteCypherLeafType
-sealed trait TemporalInstantCypherType extends TemporalValueCypherType
+trait TemporalValueCypherType extends MaterialDefiniteCypherLeafType
+trait TemporalInstantCypherType extends TemporalValueCypherType
 
 case object CTLocalDateTime extends TemporalInstantCypherType {
   override def name = "LOCALDATETIME"
@@ -208,7 +189,7 @@ object CTNode extends CTNode(Set.empty, None) with Serializable {
     CTNode(labels, None)
 }
 
-sealed case class CTNode(
+case class CTNode(
   labels: Set[String],
   override val graph: Option[QualifiedGraphName]
 ) extends MaterialDefiniteCypherType {
@@ -251,7 +232,7 @@ object CTNodeOrNull extends CTNodeOrNull(Set.empty, None) with Serializable {
     CTNodeOrNull(labels, None)
 }
 
-sealed case class CTNodeOrNull(
+case class CTNodeOrNull(
   labels: Set[String],
   override val graph: Option[QualifiedGraphName]
 ) extends NullableDefiniteCypherType {
@@ -268,7 +249,7 @@ object CTRelationship extends CTRelationship(Set.empty, None) with Serializable 
     CTRelationship(types, None)
 }
 
-sealed case class CTRelationship(
+case class CTRelationship(
   types: Set[String],
   override val graph: Option[QualifiedGraphName]
 ) extends MaterialDefiniteCypherType {
@@ -328,7 +309,7 @@ object CTRelationshipOrNull extends CTRelationshipOrNull(Set.empty, None) with S
     CTRelationshipOrNull(types, None)
 }
 
-sealed case class CTRelationshipOrNull(
+case class CTRelationshipOrNull(
   types: Set[String],
   override val graph: Option[QualifiedGraphName]
 ) extends NullableDefiniteCypherType {
@@ -408,7 +389,7 @@ case object CTNull extends NullableDefiniteCypherType {
   override def material: CTVoid.type = CTVoid
 }
 
-sealed trait CypherType extends Serializable {
+trait CypherType extends Serializable {
   self =>
 
   // We distinguish types in a 4x4 matrix
@@ -473,7 +454,7 @@ sealed trait CypherType extends Serializable {
   def superTypeOf(other: CypherType): Boolean
 }
 
-sealed trait MaterialCypherType extends CypherType {
+trait MaterialCypherType extends CypherType {
   self: CypherType =>
 
   final override def isNullable = false
@@ -487,7 +468,7 @@ sealed trait MaterialCypherType extends CypherType {
 
 }
 
-sealed trait NullableCypherType extends CypherType {
+trait NullableCypherType extends CypherType {
   self =>
 
   final override def isNullable = true
@@ -496,7 +477,7 @@ sealed trait NullableCypherType extends CypherType {
     material superTypeOf other.material
 }
 
-sealed trait DefiniteCypherType {
+trait DefiniteCypherType {
   self: CypherType =>
 
   override def nullable: NullableCypherType with DefiniteCypherType
@@ -507,7 +488,7 @@ sealed trait DefiniteCypherType {
 
 private[okapi] object MaterialDefiniteCypherType {
 
-  sealed private[okapi] trait DefaultOrNull {
+  trait DefaultOrNull {
     self: MaterialDefiniteCypherType =>
 
     override val nullable: NullableDefiniteCypherType = self match {
@@ -603,21 +584,21 @@ case object CTIdentityOrNull extends NullableDefiniteCypherType {
   override def material: CTIdentity.type = CTIdentity
 }
 
-sealed private[okapi] trait MaterialDefiniteCypherType extends MaterialCypherType with DefiniteCypherType {
+trait MaterialDefiniteCypherType extends MaterialCypherType with DefiniteCypherType {
   self =>
 
   override def material: MaterialDefiniteCypherType = self
 
 }
 
-sealed private[okapi] trait NullableDefiniteCypherType extends NullableCypherType with DefiniteCypherType {
+trait NullableDefiniteCypherType extends NullableCypherType with DefiniteCypherType {
   self =>
 
   override def nullable: NullableDefiniteCypherType = self
 
 }
 
-sealed private[okapi] trait MaterialDefiniteCypherLeafType
+trait MaterialDefiniteCypherLeafType
   extends MaterialDefiniteCypherType
     with MaterialDefiniteCypherType.DefaultOrNull {
 

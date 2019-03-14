@@ -53,7 +53,7 @@ object CypherValue {
 
     def seqToCypherList(s: Seq[_]): CypherList = s.map(CypherValue(_)).toList
 
-    customConverter.convert(v).getOrElse(
+    customConverter.convert(v).getOrElse {
       v match {
         case cv: CypherValue => cv
         case null => CypherNull
@@ -83,8 +83,9 @@ object CypherValue {
         case b: Boolean => b
         case invalid =>
           throw IllegalArgumentException(
-            "a value that can be converted to a Cypher value", s"$invalid of type ${invalid.getClass.getName}")
-      })
+            "a value that can be converted to a Cypher value", s"`$invalid` of type ${invalid.getClass.getName}")
+      }
+    }
   }
 
   /**
@@ -284,7 +285,7 @@ object CypherValue {
 
   implicit class CypherBoolean(val value: Boolean) extends AnyVal with PrimitiveCypherValue[Boolean]
 
-  sealed trait CypherNumber[+V] extends Any with PrimitiveCypherValue[V]
+  trait CypherNumber[+V] extends Any with PrimitiveCypherValue[V]
 
   implicit class CypherInteger(val value: Long) extends AnyVal with CypherNumber[Long]
 
@@ -321,7 +322,7 @@ object CypherValue {
   }
 
   object CypherMap extends UnapplyValue[Map[String, CypherValue], CypherMap] {
-    def apply(values: (String, Any)*): CypherMap = {
+    def apply(values: (String, Any)*)(implicit converter: CypherValueConverter = NoopCypherValueConverter): CypherMap = {
       values.map { case (k, v) => k -> CypherValue(v) }.toMap
     }
 

@@ -41,7 +41,7 @@ import org.opencypher.v9_0.rewriting.Deprecations.V2
 import org.opencypher.v9_0.rewriting._
 import org.opencypher.v9_0.rewriting.rewriters.Never
 import org.opencypher.v9_0.util.{ASTNode, CypherException, InputPosition}
-import org.opencypher.okapi.api.value.CypherValue.{CypherEntity, CypherMap, CypherNode, CypherRelationship}
+import org.opencypher.okapi.api.value.CypherValue.{CypherEntity, CypherMap, CypherNode, CypherRelationship, CypherValueConverter, NoopCypherValueConverter}
 import org.opencypher.okapi.impl.exception.{IllegalArgumentException, UnsupportedOperationException}
 import org.opencypher.okapi.impl.temporal.TemporalTypesHelper.parseDate
 import org.opencypher.okapi.impl.temporal.{Duration, TemporalTypesHelper}
@@ -73,7 +73,7 @@ object CreateQueryParser {
     override def errorHandler: Seq[SemanticErrorDef] => Unit = _ => ()
   }
 
-  def process(query: String): (Statement, Map[String, Any], SemanticState) = {
+  def process(query: String)(implicit customConverter: CypherValueConverter): (Statement, Map[String, Any], SemanticState) = {
     val startState = InitialState(query, None, null, Map.empty)
     val endState = pipeLine.transform(startState, defaultContext)
     val params = endState.extractedParams
@@ -98,7 +98,8 @@ object CreateGraphFactory extends InMemoryGraphFactory {
 
   type Result[A] = State[ParsingContext, A]
 
-  def apply(createQuery: String, externalParams: Map[String, Any] = Map.empty): InMemoryTestGraph = {
+  def apply(createQuery: String, externalParams: Map[String, Any] = Map.empty)
+    (implicit customConverter: CypherValueConverter = NoopCypherValueConverter): InMemoryTestGraph = {
     val (ast, params, _) = CreateQueryParser.process(createQuery)
     val context = ParsingContext.fromParams(params ++ externalParams)
 
@@ -107,7 +108,7 @@ object CreateGraphFactory extends InMemoryGraphFactory {
     }
   }
 
-  def processClauses(clauses: Seq[Clause]): Result[Unit] = {
+  def processClauses(clauses: Seq[Clause])(implicit converter: CypherValueConverter): Result[Unit] = {
     clauses match {
       case head :: tail =>
         head match {
@@ -137,7 +138,7 @@ object CreateGraphFactory extends InMemoryGraphFactory {
     }
   }
 
-  def processPattern(pattern: Pattern, merge: Boolean): Result[Unit] = {
+  def processPattern(pattern: Pattern, merge: Boolean)(implicit converter: CypherValueConverter): Result[Unit] = {
     val parts = pattern.patternParts.map {
       case EveryPath(element) => element
       case other => throw UnsupportedOperationException(s"Processing pattern: ${other.getClass.getSimpleName}")
@@ -146,7 +147,7 @@ object CreateGraphFactory extends InMemoryGraphFactory {
     Foldable[List].sequence_[Result, CypherEntity[Long]](parts.toList.map(pe => processPatternElement(pe, merge)))
   }
 
-  def processPatternElement(patternElement: ASTNode, merge: Boolean): Result[CypherEntity[Long]] = {
+  def processPatternElement(patternElement: ASTNode, merge: Boolean)(implicit converter: CypherValueConverter): Result[CypherEntity[Long]] = {
     patternElement match {
       case NodePattern(Some(variable), labels, props, _) =>
         for {
@@ -197,7 +198,7 @@ object CreateGraphFactory extends InMemoryGraphFactory {
     }
   }
 
-  def extractProperties(expr: MapExpression): Result[CypherMap] = {
+  def extractProperties(expr: MapExpression)(implicit converter: CypherValueConverter): Result[CypherMap] = {
     for {
       keys <- pure(expr.items.map(_._1.name))
       values <- expr.items.toList.traverse[Result, Any] {
@@ -253,6 +254,11 @@ object CreateGraphFactory extends InMemoryGraphFactory {
             res <- pure[ParsingContext, Any](Duration(durationMap.asInstanceOf[Map[String, Long]]))
           } yield res
 
+        case FunctionInvocation(_, FunctionName(name), _, args) =>
+          for {
+            res <- pure[ParsingContext, Any](name -> args)
+          } yield res
+
         case Property(variable: Variable, propertyKey) =>
           inspect[ParsingContext, Any]({ context =>
             context.variableMapping(variable.name) match {
@@ -261,6 +267,7 @@ object CreateGraphFactory extends InMemoryGraphFactory {
                 throw UnsupportedOperationException(s"Reading property from a ${other.getClass.getSimpleName}")
             }
           })
+
         case other =>
           throw UnsupportedOperationException(s"Processing expression of type ${other.getClass.getSimpleName}")
       }

@@ -26,11 +26,75 @@
  */
 package org.opencypher.okapi.testing.propertygraph
 
-import org.opencypher.okapi.api.value.CypherValue.CypherMap
+import org.opencypher.okapi.api.value.CypherValue.{CypherMap, CypherNumber, CypherValueConverter, UnapplyValue}
+import org.opencypher.okapi.impl.exception.IllegalArgumentException
 import org.opencypher.okapi.testing.Bag._
+import org.opencypher.okapi.testing.propertygraph.CypherBigDecimal.bigDecimalConverter
 import org.opencypher.okapi.testing.{Bag, BaseTestSuite}
+import org.opencypher.v9_0.expressions.Literal
+
+import scala.util.Try
+
+object BigDecimalModule {
+
+  implicit class CypherBigDecimal(val value: BigDecimal) extends AnyVal with CypherNumber[BigDecimal]
+
+}
+
+object CypherBigDecimal extends UnapplyValue[BigDecimal, BigDecimalModule.CypherBigDecimal] {
+
+  implicit val bigDecimalConverter: CypherValueConverter = (v: Any) => convert(v)
+
+  def convert(v: Any): Option[BigDecimalModule.CypherBigDecimal] = {
+    v match {
+      case ("bigdecimal", Seq(literal)) => {
+        literal match {
+          case l: Literal => Try(apply(l.value)).toOption
+          case _ => None
+        }
+      }
+      case _ => None
+    }
+  }
+
+  def apply(v: Any): BigDecimalModule.CypherBigDecimal = {
+    v match {
+      case i: Int => BigDecimal(i)
+      case l: Long => BigDecimal(l)
+      case f: Float => BigDecimal(f.toDouble)
+      case d: Double => BigDecimal(d)
+      case s: String => BigDecimal(s)
+      case unsupported => throw IllegalArgumentException(s"Cannot convert `$unsupported` to a BigDecimal")
+    }
+  }
+
+}
 
 class CreateQueryFactoryTest extends BaseTestSuite {
+
+  it("can create nodes with big decimal property") {
+
+    val graph = CreateGraphFactory(
+      """
+        |CREATE ({val: bigdecimal('42')})
+        |CREATE ({val: bigdecimal(42)})
+        |CREATE ({val: bigdecimal('42.1')})
+        |CREATE ({val: bigdecimal(42.1)})
+        |CREATE ({val: bigdecimal(42.25)})
+        |CREATE ({val: bigdecimal(423)})
+      """.stripMargin)(bigDecimalConverter)
+
+    graph.nodes.toBag should equal(Bag(
+      InMemoryTestNode(0, Set.empty, CypherMap("val" -> CypherBigDecimal("42"))),
+      InMemoryTestNode(1, Set.empty, CypherMap("val" -> CypherBigDecimal(42))),
+      InMemoryTestNode(2, Set.empty, CypherMap("val" -> CypherBigDecimal("42.1"))),
+      InMemoryTestNode(3, Set.empty, CypherMap("val" -> CypherBigDecimal(42.1))),
+      InMemoryTestNode(4, Set.empty, CypherMap("val" -> CypherBigDecimal(42.25))),
+      InMemoryTestNode(5, Set.empty, CypherMap("val" -> CypherBigDecimal(423)))
+    ))
+
+    graph.relationships should be(Seq.empty)
+  }
 
   test("parse single node create statement") {
     val graph = CreateGraphFactory(
@@ -188,4 +252,5 @@ class CreateQueryFactoryTest extends BaseTestSuite {
 
     graph.relationships should be(Seq.empty)
   }
+
 }

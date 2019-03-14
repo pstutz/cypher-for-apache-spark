@@ -26,7 +26,7 @@
  */
 package org.opencypher.okapi.testing.propertygraph
 
-import org.opencypher.okapi.api.value.CypherValue.{CypherMap, CypherNode, CypherRelationship}
+import org.opencypher.okapi.api.value.CypherValue.{CypherMap, CypherNode, CypherRelationship, CypherValueConverter, NoopCypherValueConverter}
 
 trait InMemoryGraph {
   def nodes: Seq[InMemoryTestNode]
@@ -93,5 +93,5 @@ case class InMemoryTestRelationship(
 }
 
 trait InMemoryGraphFactory {
-  def apply(createQuery: String, parameters: Map[String, Any]): InMemoryTestGraph
+  def apply(createQuery: String, parameters: Map[String, Any])(implicit customConverter: CypherValueConverter = NoopCypherValueConverter): InMemoryTestGraph
 }

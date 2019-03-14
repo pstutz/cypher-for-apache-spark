@@ -47,7 +47,7 @@ object Expr {
   *
   * @see [[http://neo4j.com/docs/developer-manual/current/cypher/syntax/expressions/ Cypher Expressions in the Neo4j Manual]]
   */
-sealed abstract class Expr extends AbstractTreeNode[Expr] {
+abstract class Expr extends AbstractTreeNode[Expr] {
 
   def cypherType: CypherType
 
@@ -80,7 +80,7 @@ sealed abstract class Expr extends AbstractTreeNode[Expr] {
   /**
     * When `nullInNullOut` is true, then the expression evaluates to `null`, if any of its inputs evaluate to `null`.
     *
-    * Essentially it means that `null` values pass up the evaluatio chain from children to parents.
+    * Essentially, it means that `null` values pass up the evaluation chain from children to parents.
     */
   def nullInNullOut: Boolean = true
 
@@ -490,7 +490,7 @@ final case class Divide(lhs: Expr, rhs: Expr)(val cypherType: CypherType) extend
 }
 
 // Functions
-sealed trait FunctionExpr extends Expr {
+trait FunctionExpr extends Expr {
 
   def exprs: List[Expr]
 
@@ -499,6 +499,12 @@ sealed trait FunctionExpr extends Expr {
   override final def toString = s"$name(${exprs.mkString(", ")})"
 
   override final def withoutType = s"$name(${exprs.map(_.withoutType).mkString(", ")})"
+}
+
+case class CustomFunction(namespace: List[String], override val name: String, distinct: Boolean, arguments: List[Expr])
+  (val cypherType: CypherType = CTAny) extends FunctionExpr {
+
+  override def exprs: List[Expr] = arguments
 }
 
 final case class MonotonicallyIncreasingId(cypherType: CypherType = CTInteger) extends FunctionExpr {
